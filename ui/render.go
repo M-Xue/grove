@@ -1,10 +1,6 @@
 package ui
 
-import (
-	"strings"
-
-	"github.com/charmbracelet/bubbles/key"
-)
+import "strings"
 
 const (
 	placeholderColor = "\x1b[38;5;245m"
@@ -44,35 +40,12 @@ func panelLines(m Model, contentWidth, contentHeight int) []string {
 	header := headerLines(m)
 	footer := footerLine(m, contentWidth)
 	status := statusLines(m, contentWidth)
-	bottom := append(status, footer...)
-	helpHeight := len(bottom)
-	results := []string{}
+	bottom := status
+	bottom = append(bottom, footer...)
 
-	if !m.addMode {
-		resultsHeight := max(1, contentHeight-len(header)-helpHeight)
-		visibleRows := resultsHeight
-		m.syncScroll(visibleRows)
-
-		results = make([]string, 0, visibleRows)
-		if len(m.filtered) == 0 {
-			results = append(results, "No matches")
-		} else {
-			end := min(len(m.filtered), m.scroll+visibleRows)
-			for i := m.scroll; i < end; i++ {
-				label := m.displayItem(m.filtered[i])
-				if i == m.selected {
-					results = append(results, selectionColor+label+resetColor)
-					continue
-				}
-				results = append(results, label)
-			}
-		}
-		for len(results) < visibleRows {
-			results = append(results, "")
-		}
-	}
-
-	panel := append(header, results...)
+	body := bodyLines(m, contentHeight-len(header)-len(bottom))
+	panel := header
+	panel = append(panel, body...)
 	for len(panel)+len(bottom) < contentHeight {
 		panel = append(panel, repeatLine(" ", max(contentWidth, 0)))
 	}
@@ -89,73 +62,24 @@ func panelLines(m Model, contentWidth, contentHeight int) []string {
 }
 
 func headerLines(m Model) []string {
-	modeLabel := " Change worktree"
-	if m.addMode {
-		modeLabel = " Add worktree"
+	modeLabel := "Change worktree"
+	if m.mode == ModeAdd {
+		modeLabel = "Add worktree"
 	}
 
-	lines := []string{"grove", "", modeLabel[1:], ""}
-
-	if m.addMode {
-		pathPrefix := "  "
-		branchPrefix := "  "
-		if !m.confirmCreateBranch {
-			if m.addField == pathField {
-				pathPrefix = "> "
-			} else {
-				branchPrefix = "> "
-			}
-		}
-
-		lines = append(lines,
-			pathPrefix+placeholder(m.addPath, "Relative path"),
-			branchPrefix+placeholder(m.addBranch, "Branch name"),
-			"",
-		)
-
-		if m.confirmCreateBranch {
-			lines = append(lines,
-				"Branch does not exist.",
-				"Create a new branch? [y/n]",
-				"",
-			)
-		}
-
-		return lines
+	lines := []string{"grove", "", modeLabel, ""}
+	if m.mode == ModeAdd {
+		return append(lines, addHeaderLines(m)...)
 	}
-
-	inputLine := "> "
-	if m.query == "" {
-		inputLine += placeholderColor + "Search worktree paths" + resetColor
-	} else {
-		inputLine += m.query
-	}
-
-	lines = append(lines, inputLine, "")
-	return lines
+	return append(lines, changeHeaderLines(m)...)
 }
 
 func statusLines(m Model, contentWidth int) []string {
-	if m.errorMessage != "" {
-		return []string{fitLine(" error: "+m.errorMessage, max(contentWidth, 0))}
+	if m.status.err != nil {
+		return []string{fitLine(" error: "+m.status.err.Error(), max(contentWidth, 0))}
 	}
-	if m.statusMessage != "" {
-		return []string{fitLine(" "+m.statusMessage, max(contentWidth, 0))}
+	if m.status.message != "" {
+		return []string{fitLine(" "+m.status.message, max(contentWidth, 0))}
 	}
 	return nil
-}
-
-func footerLine(m Model, contentWidth int) []string {
-	helper := m.help
-	helper.Width = max(contentWidth, 0)
-
-	if m.addMode {
-		if m.confirmCreateBranch {
-			return []string{helper.ShortHelpView([]key.Binding{m.keys.confirmYes, m.keys.confirmNo, m.keys.close, m.keys.addQuit})}
-		} else {
-			return []string{helper.ShortHelpView([]key.Binding{m.keys.submit, m.keys.switchField, m.keys.close, m.keys.addQuit})}
-		}
-	}
-
-	return []string{helper.ShortHelpView([]key.Binding{m.keys.addMode, m.keys.moveUp, m.keys.moveDown, m.keys.changeQuit})}
 }

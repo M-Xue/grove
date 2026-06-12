@@ -16,72 +16,6 @@ func clamp(value, min, max int) int {
 	return value
 }
 
-func (m *Model) syncSelection() {
-	if len(m.filtered) == 0 {
-		m.selectedItem = ""
-		m.selected = 0
-		m.scroll = 0
-		return
-	}
-
-	if m.selectedItem != "" {
-		for i, item := range m.filtered {
-			if item == m.selectedItem {
-				m.selected = i
-				m.selectedItem = item
-				return
-			}
-		}
-	}
-
-	m.selected = 0
-	m.selectedItem = m.filtered[0]
-}
-
-func (m *Model) refreshFiltered() {
-	m.filtered = filterItems(m.items, m.query)
-	m.syncSelection()
-	if len(m.filtered) == 0 {
-		m.scroll = 0
-	}
-}
-
-func (m *Model) moveSelection(delta int) {
-	if len(m.filtered) == 0 {
-		m.selected = 0
-		m.scroll = 0
-		m.selectedItem = ""
-		return
-	}
-
-	next := m.selected + delta
-	if next < 0 {
-		next = len(m.filtered) - 1
-	}
-	if next >= len(m.filtered) {
-		next = 0
-	}
-
-	m.selected = next
-	m.selectedItem = m.filtered[m.selected]
-}
-
-func (m *Model) syncScroll(visibleRows int) {
-	if visibleRows <= 0 || len(m.filtered) == 0 {
-		m.scroll = 0
-		return
-	}
-
-	maxScroll := max(0, len(m.filtered)-visibleRows)
-	if m.selected < m.scroll {
-		m.scroll = m.selected
-	}
-	if m.selected >= m.scroll+visibleRows {
-		m.scroll = m.selected - visibleRows + 1
-	}
-	m.scroll = clamp(m.scroll, 0, maxScroll)
-}
-
 func repeatLine(fill string, width int) string {
 	if width <= 0 {
 		return ""
@@ -101,10 +35,28 @@ func fitLine(content string, width int) string {
 }
 
 func (m Model) displayItem(path string) string {
-	for _, worktree := range m.worktrees {
+	for _, worktree := range m.change.worktrees {
 		if worktree.Path == path {
 			return path + " [" + worktree.Branch + "]"
 		}
 	}
 	return path
+}
+
+func (m *Model) setError(err error) {
+	m.status.err = err
+	m.status.message = ""
+}
+
+func (m *Model) clearError() {
+	m.status.err = nil
+}
+
+func (m *Model) setStatus(message string) {
+	m.status.message = message
+	m.status.err = nil
+}
+
+func (m *Model) clearStatus() {
+	m.status.message = ""
 }
