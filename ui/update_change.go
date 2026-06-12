@@ -9,6 +9,15 @@ func (m Model) updateChange(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+a":
 		m.startAddMode()
 		return m, nil
+	case "ctrl+d":
+		path, ok := m.selectedChangePath()
+		if !ok {
+			m.setStatus("no worktree selected")
+			return m, nil
+		}
+		m.setStatus("removing worktree")
+		m.clearError()
+		return m, removeWorktreeCmd(m.manager, path)
 	case "up", "shift+tab":
 		m.moveChangeSelection(-1)
 		return m, nil
@@ -43,4 +52,17 @@ func (m Model) handleWorktreesLoaded(msg worktreesLoadedMsg) (tea.Model, tea.Cmd
 	m.syncChangeItemsFromWorktrees()
 	m.clearError()
 	return m, nil
+}
+
+func (m Model) handleWorktreeRemoved(msg worktreeRemovedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.setError(msg.err)
+		return m, nil
+	}
+	if msg.path != "" {
+		m.change.selectedItem = msg.path
+	}
+	m.setStatus("worktree removed")
+	m.clearError()
+	return m, loadWorktreesCmd(m.manager)
 }

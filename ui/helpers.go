@@ -43,6 +43,16 @@ func (m Model) displayItem(path string) string {
 	return path
 }
 
+func (m Model) selectedChangePath() (string, bool) {
+	if len(m.change.filtered) == 0 {
+		return "", false
+	}
+	if m.change.selected < 0 || m.change.selected >= len(m.change.filtered) {
+		return "", false
+	}
+	return m.change.filtered[m.change.selected], true
+}
+
 func (m *Model) setError(err error) {
 	m.status.err = err
 	m.status.message = ""

@@ -139,6 +139,58 @@ func TestManagerAddNewBranchRunsGitWorktreeAddWithBranchCreation(t *testing.T) {
 	}
 }
 
+func TestManagerRemoveRunsGitWorktreeRemove(t *testing.T) {
+	runner := &stubRunner{
+		results: map[string]commandResult{
+			commandKey("git", "worktree", "remove", "../feature-auth"): {},
+		},
+	}
+	manager := NewManagerWithRunner(runner)
+
+	err := manager.Remove("../feature-auth")
+	if err != nil {
+		t.Fatalf("Remove returned error: %v", err)
+	}
+
+	want := commandCall{name: "git", args: []string{"worktree", "remove", "../feature-auth"}}
+	if len(runner.calls) != 1 || !reflect.DeepEqual(runner.calls[0], want) {
+		t.Fatalf("unexpected call: got %+v want %+v", runner.calls, want)
+	}
+}
+
+func TestManagerRemoveRequiresPath(t *testing.T) {
+	runner := &stubRunner{}
+	manager := NewManagerWithRunner(runner)
+
+	err := manager.Remove(" ")
+	if err == nil {
+		t.Fatal("expected error for missing path")
+	}
+	if !errors.Is(err, ErrWorktreePathRequired) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(runner.calls) != 0 {
+		t.Fatal("runner should not be called for invalid input")
+	}
+}
+
+func TestManagerRemoveReturnsRunnerError(t *testing.T) {
+	runner := &stubRunner{
+		results: map[string]commandResult{
+			commandKey("git", "worktree", "remove", "../feature-auth"): {err: errors.New("git failed")},
+		},
+	}
+	manager := NewManagerWithRunner(runner)
+
+	err := manager.Remove("../feature-auth")
+	if err == nil {
+		t.Fatal("expected runner error")
+	}
+	if err.Error() != "git failed" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestManagerBranchExistsReturnsTrueForExistingBranch(t *testing.T) {
 	runner := &stubRunner{
 		results: map[string]commandResult{

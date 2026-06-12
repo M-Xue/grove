@@ -17,3 +17,8 @@ type branchCheckedMsg struct {
 type worktreeAddedMsg struct {
 	err error
 }
+
+type worktreeRemovedMsg struct {
+	path string
+	err  error
+}

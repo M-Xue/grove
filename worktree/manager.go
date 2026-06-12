@@ -29,6 +29,7 @@ type Manager interface {
 	BranchExists(branch string) (bool, error)
 	InRepo() error
 	List() ([]WorktreeInfo, error)
+	Remove(path string) error
 }
 
 type manager struct {
@@ -63,6 +64,16 @@ func (s manager) AddNewBranch(path, branch string) error {
 	}
 
 	_, err = s.runner.CombinedOutput("git", "worktree", "add", "-b", branch, path)
+	return err
+}
+
+func (s manager) Remove(path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ErrWorktreePathRequired
+	}
+
+	_, err := s.runner.CombinedOutput("git", "worktree", "remove", path)
 	return err
 }
 

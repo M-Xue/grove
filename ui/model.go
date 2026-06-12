@@ -78,6 +78,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleBranchChecked(msg)
 	case worktreeAddedMsg:
 		return m.handleWorktreeAdded(msg)
+	case worktreeRemovedMsg:
+		return m.handleWorktreeRemoved(msg)
 	case tea.KeyMsg:
 		switch m.mode {
 		case ModeAdd:

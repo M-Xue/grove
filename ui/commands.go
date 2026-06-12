@@ -30,3 +30,10 @@ func addWorktreeCmd(manager worktree.Manager, path, branch string, createBranch 
 		return worktreeAddedMsg{err: err}
 	}
 }
+
+func removeWorktreeCmd(manager worktree.Manager, path string) tea.Cmd {
+	return func() tea.Msg {
+		err := manager.Remove(path)
+		return worktreeRemovedMsg{path: path, err: err}
+	}
+}
