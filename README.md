@@ -1,8 +1,17 @@
 # grove
 
-`grove` is a terminal UI for browsing and managing git worktrees.
+`grove` is a terminal UI for browsing, filtering, creating, and removing Git worktrees.
 
-Press `enter` in the TUI to select the highlighted worktree. The binary prints the selected path to `stdout` and exits. A shell wrapper captures that output and changes your current shell directory.
+It helps developers jump between parallel branches quickly from a keyboard-first interface, while preserving a clean shell-wrapper contract for directory switching.
+
+## Features
+
+- Browse all worktrees in a fast terminal UI
+- Filter worktrees by path
+- Jump directly into a selected worktree
+- Create worktrees from existing or new branches
+- Remove worktrees without leaving the TUI
+- View `git worktree` docs inside the app
 
 ## Install
 
