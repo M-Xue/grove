@@ -1,6 +1,10 @@
 package ui
 
 import (
+	"os/exec"
+	"regexp"
+	"strings"
+
 	"github.com/M-Xue/grove/worktree"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -36,4 +40,29 @@ func removeWorktreeCmd(manager worktree.Manager, path string) tea.Cmd {
 		err := manager.Remove(path)
 		return worktreeRemovedMsg{path: path, err: err}
 	}
+}
+
+func openWorktreeDocsCmd() tea.Cmd {
+	return func() tea.Msg {
+		output, err := exec.Command("git", "--no-pager", "help", "worktree").CombinedOutput()
+		if err != nil {
+			return worktreeDocsLoadedMsg{err: err}
+		}
+		return worktreeDocsLoadedMsg{lines: formatWorktreeDocs(string(output))}
+	}
+}
+
+var backspaceOverstrikePattern = regexp.MustCompile(`.`)
+
+func formatWorktreeDocs(output string) []string {
+	cleaned := strings.ReplaceAll(output, "\r\n", "\n")
+	cleaned = strings.ReplaceAll(cleaned, "\r", "\n")
+	for backspaceOverstrikePattern.MatchString(cleaned) {
+		cleaned = backspaceOverstrikePattern.ReplaceAllString(cleaned, "")
+	}
+	cleaned = strings.TrimSpace(cleaned)
+	if cleaned == "" {
+		return []string{"No documentation available."}
+	}
+	return strings.Split(cleaned, "\n")
 }

@@ -41,5 +41,5 @@ func changeBodyLines(m Model, availableHeight int) []string {
 func changeFooterLines(m Model, contentWidth int) []string {
 	helper := m.help
 	helper.Width = max(contentWidth, 0)
-	return []string{helper.ShortHelpView([]key.Binding{m.keys.submit, m.keys.addMode, m.keys.remove, m.keys.moveUp, m.keys.moveDown, m.keys.changeQuit})}
+	return []string{helper.ShortHelpView([]key.Binding{m.keys.submit, m.keys.docs, m.keys.addMode, m.keys.remove, m.keys.moveUp, m.keys.moveDown, m.keys.changeQuit})}
 }

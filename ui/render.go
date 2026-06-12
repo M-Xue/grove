@@ -65,11 +65,16 @@ func headerLines(m Model) []string {
 	modeLabel := "Change worktree"
 	if m.mode == ModeAdd {
 		modeLabel = "Add worktree"
+	} else if m.mode == ModeDocs {
+		modeLabel = "Docs"
 	}
 
 	lines := []string{"grove", "", modeLabel, ""}
 	if m.mode == ModeAdd {
 		return append(lines, addHeaderLines(m)...)
+	}
+	if m.mode == ModeDocs {
+		return append(lines, docsHeaderLines()...)
 	}
 	return append(lines, changeHeaderLines(m)...)
 }

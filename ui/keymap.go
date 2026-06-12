@@ -4,6 +4,7 @@ import "github.com/charmbracelet/bubbles/key"
 
 type keyMap struct {
 	addMode     key.Binding
+	docs        key.Binding
 	remove      key.Binding
 	moveUp      key.Binding
 	moveDown    key.Binding
@@ -21,6 +22,10 @@ func newKeyMap() keyMap {
 		addMode: key.NewBinding(
 			key.WithKeys("ctrl+a"),
 			key.WithHelp("ctrl+a", "add worktree"),
+		),
+		docs: key.NewBinding(
+			key.WithKeys("?"),
+			key.WithHelp("?", "docs"),
 		),
 		remove: key.NewBinding(
 			key.WithKeys("ctrl+d"),

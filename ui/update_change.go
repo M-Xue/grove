@@ -9,6 +9,8 @@ func (m Model) updateChange(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+a":
 		m.startAddMode()
 		return m, nil
+	case "?":
+		return m, openWorktreeDocsCmd()
 	case "ctrl+d":
 		path, ok := m.selectedChangePath()
 		if !ok {

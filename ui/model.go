@@ -11,6 +11,7 @@ type Mode string
 const (
 	ModeChange Mode = "change"
 	ModeAdd    Mode = "add"
+	ModeDocs   Mode = "docs"
 )
 
 type StatusState struct {
@@ -39,6 +40,11 @@ type AddState struct {
 	pending             bool
 }
 
+type DocsState struct {
+	lines  []string
+	scroll int
+}
+
 type Model struct {
 	manager worktree.Manager
 	help    help.Model
@@ -49,6 +55,7 @@ type Model struct {
 	status  StatusState
 	change  ChangeState
 	add     AddState
+	docs    DocsState
 }
 
 func New(manager worktree.Manager) Model {
@@ -81,10 +88,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleWorktreeAdded(msg)
 	case worktreeRemovedMsg:
 		return m.handleWorktreeRemoved(msg)
+	case worktreeDocsLoadedMsg:
+		return m.handleWorktreeDocsLoaded(msg)
 	case tea.KeyMsg:
 		switch m.mode {
 		case ModeAdd:
 			return m.updateAdd(msg)
+		case ModeDocs:
+			return m.updateDocs(msg)
 		default:
 			return m.updateChange(msg)
 		}

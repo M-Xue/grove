@@ -58,3 +58,50 @@ func TestHandleWorktreesLoadedClearsSubmittedPath(t *testing.T) {
 		t.Fatal("expected no command")
 	}
 }
+
+func TestUpdateChangeQuestionMarkOpensDocs(t *testing.T) {
+	m := New(nil)
+
+	updated, cmd := m.updateChange(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	got := updated.(Model)
+
+	if cmd == nil {
+		t.Fatal("expected docs command")
+	}
+	if got.mode != ModeChange {
+		t.Fatalf("expected mode to remain change, got %q", got.mode)
+	}
+}
+
+func TestHandleWorktreeDocsLoadedEntersDocsMode(t *testing.T) {
+	m := New(nil)
+	updated, cmd := m.handleWorktreeDocsLoaded(worktreeDocsLoadedMsg{lines: []string{"line 1", "line 2"}})
+	got := updated.(Model)
+
+	if got.mode != ModeDocs {
+		t.Fatalf("expected docs mode, got %q", got.mode)
+	}
+	if len(got.docs.lines) != 2 {
+		t.Fatalf("expected docs lines to load, got %d", len(got.docs.lines))
+	}
+	if cmd != nil {
+		t.Fatal("expected no command")
+	}
+}
+
+func TestHandleWorktreeDocsLoadedSetsError(t *testing.T) {
+	m := New(nil)
+	wantErr := worktree.ErrNotGitRepo
+	updated, cmd := m.handleWorktreeDocsLoaded(worktreeDocsLoadedMsg{err: wantErr})
+	got := updated.(Model)
+
+	if got.status.err != wantErr {
+		t.Fatalf("unexpected error: got %v want %v", got.status.err, wantErr)
+	}
+	if got.mode != ModeChange {
+		t.Fatalf("expected change mode, got %q", got.mode)
+	}
+	if cmd != nil {
+		t.Fatal("expected no command")
+	}
+}

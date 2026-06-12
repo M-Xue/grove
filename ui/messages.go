@@ -22,3 +22,8 @@ type worktreeRemovedMsg struct {
 	path string
 	err  error
 }
+
+type worktreeDocsLoadedMsg struct {
+	lines []string
+	err   error
+}
