@@ -1,6 +1,10 @@
 package ui
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 func clamp(value, min, max int) int {
 	if value < min {
@@ -89,8 +93,18 @@ func fitLine(content string, width int) string {
 	if width <= 0 {
 		return ""
 	}
-	if len(content) > width {
-		return content[:width]
+	contentWidth := lipgloss.Width(content)
+	if contentWidth > width {
+		return lipgloss.NewStyle().MaxWidth(width).Render(content)
 	}
-	return content + strings.Repeat(" ", width-len(content))
+	return content + strings.Repeat(" ", width-contentWidth)
+}
+
+func (m Model) displayItem(path string) string {
+	for _, worktree := range m.worktrees {
+		if worktree.Path == path {
+			return path + " [" + worktree.Branch + "]"
+		}
+	}
+	return path
 }
