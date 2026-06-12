@@ -5,6 +5,9 @@ import "strings"
 const (
 	placeholderColor = "\x1b[38;5;245m"
 	selectionColor   = "\x1b[38;5;183m"
+	statusColor      = "\x1b[38;5;117m"
+	errorColor       = "\x1b[38;5;203m"
+	labelColor       = "\x1b[38;5;240m"
 	resetColor       = "\x1b[0m"
 
 	horizontalPadding = 4
@@ -81,10 +84,14 @@ func headerLines(m Model) []string {
 
 func statusLines(m Model, contentWidth int) []string {
 	if m.status.err != nil {
-		return []string{fitLine(" error: "+m.status.err.Error(), max(contentWidth, 0))}
+		return []string{renderStatusLine("error", errorColor, m.status.err.Error(), contentWidth)}
 	}
 	if m.status.message != "" {
-		return []string{fitLine(" "+m.status.message, max(contentWidth, 0))}
+		return []string{renderStatusLine("status", statusColor, m.status.message, contentWidth)}
 	}
 	return nil
+}
+
+func renderStatusLine(label, color, message string, contentWidth int) string {
+	return fitLine(color+"["+label+"]"+resetColor+" "+labelColor+">"+resetColor+" "+message, max(contentWidth, 0))
 }
