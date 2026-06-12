@@ -1,4 +1,4 @@
-# grove
+# grove 🌳
 
 `grove` is a terminal UI for browsing, filtering, creating, and removing Git worktrees.
 
