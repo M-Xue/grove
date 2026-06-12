@@ -1,0 +1,27 @@
+version: 2
+
+project_name: grove
+
+builds:
+  - id: grove
+    main: ./main.go
+    binary: grove
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: default
+    builds:
+      - grove
+    files:
+      - README.md
+      - LICENSE
+      - scripts/wrappers/*
+
+checksum:
+  name_template: checksums.txt

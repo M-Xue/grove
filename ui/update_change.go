@@ -30,7 +30,15 @@ func (m Model) updateChange(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.refreshChangeFiltered()
 		}
 		return m, nil
-	case "enter", "left", "right":
+	case "enter":
+		path, ok := m.selectedChangePath()
+		if !ok {
+			m.setStatus("no worktree selected")
+			return m, nil
+		}
+		m.change.submittedPath = path
+		return m, tea.Quit
+	case "left", "right":
 		return m, nil
 	default:
 		if msg.Type == tea.KeyRunes {
@@ -50,6 +58,7 @@ func (m Model) handleWorktreesLoaded(msg worktreesLoadedMsg) (tea.Model, tea.Cmd
 	}
 	m.change.worktrees = msg.worktrees
 	m.syncChangeItemsFromWorktrees()
+	m.change.submittedPath = ""
 	m.clearError()
 	return m, nil
 }

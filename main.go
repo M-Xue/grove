@@ -17,8 +17,23 @@ func main() {
 	}
 
 	p := tea.NewProgram(ui.New(manager), tea.WithAltScreen())
-	if _, err := p.Run(); err != nil {
+	model, err := p.Run()
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "error running grove: %v\n", err)
 		os.Exit(1)
 	}
+
+	finalModel, ok := model.(ui.Model)
+	if !ok {
+		fmt.Fprintln(os.Stderr, "error running grove: unexpected final model type")
+		os.Exit(1)
+	}
+
+	if path := selectedPathOutput(finalModel); path != "" {
+		fmt.Println(path)
+	}
+}
+
+func selectedPathOutput(model ui.Model) string {
+	return model.ChangeSubmittedPath()
 }

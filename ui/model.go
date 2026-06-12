@@ -19,13 +19,14 @@ type StatusState struct {
 }
 
 type ChangeState struct {
-	query        string
-	selectedItem string
-	selected     int
-	scroll       int
-	items        []string
-	filtered     []string
-	worktrees    []worktree.WorktreeInfo
+	query         string
+	selectedItem  string
+	selected      int
+	scroll        int
+	items         []string
+	filtered      []string
+	worktrees     []worktree.WorktreeInfo
+	submittedPath string
 }
 
 type AddState struct {
