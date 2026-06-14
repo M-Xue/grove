@@ -23,7 +23,7 @@ type Runner interface {
 	CombinedOutput(name string, args ...string) ([]byte, error)
 }
 
-type Manager interface {
+type Service interface {
 	Add(path, branch string) error
 	AddNewBranch(path, branch string) error
 	BranchExists(branch string) (bool, error)
@@ -36,13 +36,13 @@ type manager struct {
 	runner Runner
 }
 
-func NewManager() Manager {
+func NewService() Service {
 	return manager{runner: commandRunner{}}
 }
 
-func NewManagerWithRunner(runner Runner) Manager {
+func NewServiceWithRunner(runner Runner) Service {
 	if runner == nil {
-		return NewManager()
+		return NewService()
 	}
 	return manager{runner: runner}
 }
