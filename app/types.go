@@ -60,7 +60,10 @@ type AddState struct{}
 
 type DocsState struct{}
 
-type BranchState struct{}
+type BranchState struct {
+	SelectedName string
+	Commits      []branchsvc.CommitInfo
+}
 
 type State struct {
 	Screen        ScreenID

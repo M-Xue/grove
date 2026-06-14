@@ -46,6 +46,30 @@ func TestInitUsesInitialScreenEffect(t *testing.T) {
 	}
 }
 
+func TestSelectBranchLoadsCommitsForSelection(t *testing.T) {
+	a := New(Services{})
+	effect := a.SelectBranch("feature/a")
+	loadEffect, ok := effect.(LoadBranchCommitsEffect)
+	if !ok {
+		t.Fatalf("expected LoadBranchCommitsEffect, got %#v", effect)
+	}
+	if loadEffect.Name != "feature/a" || loadEffect.Limit != branchCommitPreviewLimit {
+		t.Fatalf("unexpected load effect: %#v", loadEffect)
+	}
+}
+
+func TestHandleBranchesLoadedRequestsCommitPreviewForSelection(t *testing.T) {
+	a := New(Services{})
+	effect := a.HandleResult(BranchesLoadedResult{Branches: []branchsvc.Info{{Name: "feature/a"}}})
+	loadEffect, ok := effect.(LoadBranchCommitsEffect)
+	if !ok {
+		t.Fatalf("expected LoadBranchCommitsEffect, got %#v", effect)
+	}
+	if loadEffect.Name != "feature/a" {
+		t.Fatalf("unexpected branch name: %q", loadEffect.Name)
+	}
+}
+
 func TestRequestAddWorktreeRequiresPathAndBranch(t *testing.T) {
 	a := New(Services{})
 	if effect := a.RequestAddWorktree("", "branch"); effect != nil {

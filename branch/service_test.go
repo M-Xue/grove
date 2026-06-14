@@ -158,6 +158,29 @@ func TestFetchRunsGitFetch(t *testing.T) {
 	}
 }
 
+func TestRecentCommitsParsesGitLogOutput(t *testing.T) {
+	runner := &stubRunner{
+		results: map[string]commandResult{
+			commandKey("git", "log", "-n10", "--format=%h%x1f%an%x1f%s", "feature/a"): {
+				output: []byte("abc123\x1fMax\x1fAdd auth flow\ndef456\x1fSam\x1fFix tests\n"),
+			},
+		},
+	}
+
+	service := NewServiceWithRunner(runner)
+	commits, err := service.RecentCommits("feature/a", 10)
+	if err != nil {
+		t.Fatalf("RecentCommits returned error: %v", err)
+	}
+	want := []CommitInfo{
+		{Hash: "abc123", Author: "Max", Subject: "Add auth flow"},
+		{Hash: "def456", Author: "Sam", Subject: "Fix tests"},
+	}
+	if !reflect.DeepEqual(commits, want) {
+		t.Fatalf("unexpected commits: got %#v want %#v", commits, want)
+	}
+}
+
 func TestDeleteRunsGitBranchDeleteForLocalScope(t *testing.T) {
 	runner := &stubRunner{
 		results: map[string]commandResult{

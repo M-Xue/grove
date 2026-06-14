@@ -194,6 +194,11 @@ func (m *Model) runEffect(effect app.Effect) tea.Cmd {
 			branches, scope, err := services.Branch.List()
 			return effectMsg{result: app.BranchesLoadedResult{Branches: branches, Scope: scope, Err: err}}
 		}
+	case app.LoadBranchCommitsEffect:
+		return func() tea.Msg {
+			commits, err := services.Branch.RecentCommits(effect.Name, effect.Limit)
+			return effectMsg{result: app.BranchCommitsLoadedResult{Name: effect.Name, Commits: commits, Err: err}}
+		}
 	case app.ToggleBranchScopeEffect:
 		return func() tea.Msg {
 			services.Branch.ToggleScope()

@@ -11,6 +11,11 @@ type LoadWorktreesEffect struct{}
 
 type LoadBranchesEffect struct{}
 
+type LoadBranchCommitsEffect struct {
+	Name  string
+	Limit int
+}
+
 type ToggleBranchScopeEffect struct{}
 
 type CheckoutBranchEffect struct {
@@ -55,6 +60,12 @@ type BranchesLoadedResult struct {
 	Branches []branchsvc.Info
 	Scope    branchsvc.Scope
 	Err      error
+}
+
+type BranchCommitsLoadedResult struct {
+	Name    string
+	Commits []branchsvc.CommitInfo
+	Err     error
 }
 
 type BranchCheckedOutResult struct {
