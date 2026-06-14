@@ -93,11 +93,9 @@ func (m *Model) View() string {
 	footer := m.footer(contentWidth, state)
 	loadingLines := m.loading.View(state.Loading, contentWidth)
 	statusLines := m.status.View(state.Statuses, contentWidth)
-	reservedBottom := 2
-	reservedBottom += len(loadingLines)
-	reservedBottom += len(statusLines)
+	noticeLines := expandRenderedLines(append(append([]string(nil), loadingLines...), statusLines...))
 	contentHeight := max(0, m.height-verticalPadding*2)
-	bodyHeight := max(0, contentHeight-reservedBottom)
+	bodyHeight := max(0, contentHeight-2)
 	var body string
 	switch state.Screen {
 	case app.ScreenAdd:
@@ -112,12 +110,6 @@ func (m *Model) View() string {
 	bodyLines := fitBody(body, contentWidth, bodyHeight)
 	lines := make([]string, 0, contentHeight)
 	lines = append(lines, bodyLines...)
-	for _, line := range loadingLines {
-		lines = append(lines, fitBottomLine(line, contentWidth))
-	}
-	for _, line := range statusLines {
-		lines = append(lines, fitBottomLine(line, contentWidth))
-	}
 	lines = append(lines, fitBottomLine("", contentWidth))
 	lines = append(lines, fitBottomLine(footer, contentWidth))
 	for len(lines) < contentHeight {
@@ -126,6 +118,7 @@ func (m *Model) View() string {
 	if len(lines) > contentHeight {
 		lines = lines[:contentHeight]
 	}
+	overlayNoticeLines(lines, noticeLines, contentWidth)
 
 	padded := make([]string, 0, m.height)
 	blankLine := strings.Repeat(" ", max(m.width, 0))
@@ -281,6 +274,36 @@ func fitBottomLine(content string, width int) string {
 		return lipgloss.NewStyle().MaxWidth(width).Render(content)
 	}
 	return content + strings.Repeat(" ", width-contentWidth)
+}
+
+func overlayNoticeLines(canvas []string, noticeLines []string, width int) {
+	if len(canvas) < 2 || len(noticeLines) == 0 {
+		return
+	}
+	maxNoticeHeight := max(0, len(canvas)-2)
+	if maxNoticeHeight == 0 {
+		return
+	}
+	if len(noticeLines) > maxNoticeHeight {
+		noticeLines = append([]string(nil), noticeLines[len(noticeLines)-maxNoticeHeight:]...)
+	}
+	start := len(canvas) - 2 - len(noticeLines)
+	for i, line := range noticeLines {
+		row := start + i
+		if row < 0 || row >= len(canvas)-2 {
+			continue
+		}
+		canvas[row] = fitBottomLine(line, width)
+	}
+}
+
+func expandRenderedLines(lines []string) []string {
+	expanded := make([]string, 0, len(lines))
+	for _, line := range lines {
+		parts := strings.Split(line, "\n")
+		expanded = append(expanded, parts...)
+	}
+	return expanded
 }
 
 func (m *Model) footer(contentWidth int, state app.State) string {
