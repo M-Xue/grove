@@ -6,18 +6,44 @@ type App struct {
 	loadingCounter int
 }
 
-func New(services Services) *App {
-	return &App{
+type Option func(*App)
+
+func WithInitialScreen(screen ScreenID) Option {
+	return func(a *App) {
+		a.state.Screen = screen
+	}
+}
+
+func New(services Services, options ...Option) *App {
+	a := &App{
 		services: services,
 		state: State{
 			Screen: ScreenChange,
 		},
 	}
+	for _, option := range options {
+		if option == nil {
+			continue
+		}
+		option(a)
+	}
+	return a
 }
 
 func (a *App) Init() Effect {
-	a.setLoading("loading worktrees")
-	return LoadWorktreesEffect{}
+	switch a.state.Screen {
+	case ScreenAdd:
+		return nil
+	case ScreenDocs:
+		a.setLoading("loading docs")
+		return LoadDocsEffect{}
+	case ScreenBranch:
+		a.setLoading("loading branches")
+		return LoadBranchesEffect{}
+	default:
+		a.setLoading("loading worktrees")
+		return LoadWorktreesEffect{}
+	}
 }
 
 func (a *App) State() State {
