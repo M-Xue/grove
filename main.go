@@ -4,26 +4,33 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/M-Xue/grove/app"
+	"github.com/M-Xue/grove/docs"
 	"github.com/M-Xue/grove/ui"
 	"github.com/M-Xue/grove/worktree"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 func main() {
-	manager := worktree.NewManager()
-	if err := manager.InRepo(); err != nil {
+	worktreeService := worktree.NewService()
+	if err := worktreeService.InRepo(); err != nil {
 		fmt.Fprintf(os.Stderr, "error running grove: %v\n", err)
 		os.Exit(1)
 	}
 
-	p := tea.NewProgram(ui.New(manager), tea.WithAltScreen())
+	application := app.New(app.Services{
+		Worktree: worktreeService,
+		Docs:     docs.NewService(),
+	})
+
+	p := tea.NewProgram(ui.New(application), tea.WithAltScreen())
 	model, err := p.Run()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error running grove: %v\n", err)
 		os.Exit(1)
 	}
 
-	finalModel, ok := model.(ui.Model)
+	finalModel, ok := model.(*ui.Model)
 	if !ok {
 		fmt.Fprintln(os.Stderr, "error running grove: unexpected final model type")
 		os.Exit(1)
@@ -34,6 +41,6 @@ func main() {
 	}
 }
 
-func selectedPathOutput(model ui.Model) string {
-	return model.ChangeSubmittedPath()
+func selectedPathOutput(model *ui.Model) string {
+	return model.SubmittedPath()
 }
