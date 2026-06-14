@@ -10,7 +10,11 @@ const (
 	KeyEsc       Key = "esc"
 	KeyCtrlC     Key = "ctrl+c"
 	KeyCtrlA     Key = "ctrl+a"
+	KeyCtrlB     Key = "ctrl+b"
 	KeyCtrlD     Key = "ctrl+d"
+	KeyCtrlShiftD Key = "ctrl+shift+d"
+	KeyCtrlF     Key = "ctrl+f"
+	KeyCtrlO     Key = "ctrl+o"
 	KeyQuestion  Key = "?"
 	KeyUp        Key = "up"
 	KeyDown      Key = "down"
@@ -34,8 +38,16 @@ func Normalize(msg tea.KeyMsg) Key {
 		return KeyCtrlC
 	case "ctrl+a":
 		return KeyCtrlA
+	case "ctrl+b":
+		return KeyCtrlB
 	case "ctrl+d":
 		return KeyCtrlD
+	case "ctrl+shift+d":
+		return KeyCtrlShiftD
+	case "ctrl+f":
+		return KeyCtrlF
+	case "ctrl+o":
+		return KeyCtrlO
 	case "?":
 		return KeyQuestion
 	case "up":

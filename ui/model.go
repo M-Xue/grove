@@ -28,6 +28,7 @@ type Model struct {
 	change  *screens.ChangeScreen
 	add     *screens.AddScreen
 	docs    *screens.DocsScreen
+	branch  *screens.BranchScreen
 }
 
 func New(application *app.App) *Model {
@@ -39,6 +40,7 @@ func New(application *app.App) *Model {
 		change:  screens.NewChangeScreen(),
 		add:     screens.NewAddScreen(),
 		docs:    screens.NewDocsScreen(),
+		branch:  screens.NewBranchScreen(),
 	}
 }
 
@@ -71,6 +73,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd = m.add.Update(ctx, msg, m.app.State())
 		case app.ScreenDocs:
 			cmd = m.docs.Update(ctx, msg, m.app.State())
+		case app.ScreenBranch:
+			cmd = m.branch.Update(ctx, msg, m.app.State())
 		default:
 			cmd = m.change.Update(ctx, msg, m.app.State())
 		}
@@ -100,6 +104,8 @@ func (m *Model) View() string {
 		body = m.add.View(contentWidth, bodyHeight, state)
 	case app.ScreenDocs:
 		body = m.docs.View(contentWidth, bodyHeight, state)
+	case app.ScreenBranch:
+		body = m.branch.View(contentWidth, bodyHeight, state)
 	default:
 		body = m.change.View(contentWidth, bodyHeight, state)
 	}
@@ -149,6 +155,7 @@ func (m *Model) syncScreens() {
 	m.change.Sync(state)
 	m.add.Sync(state)
 	m.docs.Sync(state)
+	m.branch.Sync(state)
 	m.screen = state.Screen
 }
 
@@ -161,6 +168,9 @@ func (m *Model) syncScreenTransitions(previous, current app.ScreenID) {
 	}
 	if previous == app.ScreenChange {
 		m.change.Reset()
+	}
+	if previous == app.ScreenBranch {
+		m.branch.Reset()
 	}
 }
 
@@ -178,6 +188,37 @@ func (m *Model) runEffect(effect app.Effect) tea.Cmd {
 		return func() tea.Msg {
 			lines, err := services.Docs.WorktreeHelp()
 			return effectMsg{result: app.DocsLoadedResult{Lines: lines, Err: err}}
+		}
+	case app.LoadBranchesEffect:
+		return func() tea.Msg {
+			branches, scope, err := services.Branch.List()
+			return effectMsg{result: app.BranchesLoadedResult{Branches: branches, Scope: scope, Err: err}}
+		}
+	case app.ToggleBranchScopeEffect:
+		return func() tea.Msg {
+			services.Branch.ToggleScope()
+			branches, scope, err := services.Branch.List()
+			return effectMsg{result: app.BranchesLoadedResult{Branches: branches, Scope: scope, Err: err}}
+		}
+	case app.CheckoutBranchEffect:
+		return func() tea.Msg {
+			err := services.Branch.Checkout(effect.Name)
+			return effectMsg{result: app.BranchCheckedOutResult{Err: err}}
+		}
+	case app.DeleteBranchEffect:
+		return func() tea.Msg {
+			err := services.Branch.Delete(effect.Name)
+			return effectMsg{result: app.BranchDeletedResult{Err: err}}
+		}
+	case app.DeleteAllBranchesEffect:
+		return func() tea.Msg {
+			summary, err := services.Branch.DeleteAllLocal()
+			return effectMsg{result: app.AllBranchesDeletedResult{Deleted: summary.Deleted, Skipped: summary.Skipped, Err: err}}
+		}
+	case app.FetchBranchesEffect:
+		return func() tea.Msg {
+			err := services.Branch.Fetch()
+			return effectMsg{result: app.BranchesFetchedResult{Err: err}}
 		}
 	case app.CheckBranchExistsEffect:
 		return func() tea.Msg {
@@ -243,6 +284,8 @@ func (m *Model) footer(contentWidth int, state app.State) string {
 		return m.add.Footer(contentWidth, state.Dialog.Active)
 	case app.ScreenDocs:
 		return m.docs.Footer(contentWidth)
+	case app.ScreenBranch:
+		return m.branch.Footer(contentWidth, state.BranchScope)
 	default:
 		if state.Dialog.Active {
 			return m.change.DialogFooter(contentWidth)

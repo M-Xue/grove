@@ -1,6 +1,9 @@
 package app
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 func (a *App) OpenDocs() Effect {
 	a.state.Screen = ScreenDocs
@@ -34,6 +37,15 @@ func (a *App) DialogChoose(buttonID string) Effect {
 		a.clearDialog()
 		a.setLoading("creating branch and worktree")
 		return AddWorktreeEffect{Path: path, Branch: branch, CreateBranch: true}
+	case DialogConfirmDeleteBranch:
+		branch := a.state.Dialog.Branch
+		a.clearDialog()
+		a.setLoading("deleting branch")
+		return DeleteBranchEffect{Name: branch}
+	case DialogConfirmDeleteAllBranches:
+		a.clearDialog()
+		a.setLoading("deleting local branches")
+		return DeleteAllBranchesEffect{}
 	default:
 		return nil
 	}
@@ -51,6 +63,63 @@ func (a *App) HandleResult(result Result) Effect {
 		a.state.SubmittedPath = ""
 		a.markLoadingDone()
 		return nil
+	case BranchesLoadedResult:
+		if msg.Err != nil {
+			a.clearLoading()
+			a.appendStatus(StatusError, msg.Err.Error())
+			return nil
+		}
+		a.state.Branches = msg.Branches
+		a.state.BranchScope = msg.Scope
+		a.markLoadingDone()
+		return nil
+	case BranchCheckedOutResult:
+		if msg.Err != nil {
+			a.clearLoading()
+			a.appendStatus(StatusError, msg.Err.Error())
+			return nil
+		}
+		a.markLoadingDone()
+		a.appendStatus(StatusSuccess, "branch switched")
+		a.setLoading("loading branches")
+		return LoadBranchesEffect{}
+	case BranchDeletedResult:
+		if msg.Err != nil {
+			a.clearLoading()
+			a.appendStatus(StatusError, msg.Err.Error())
+			return nil
+		}
+		a.markLoadingDone()
+		a.appendStatus(StatusSuccess, "branch deleted")
+		a.setLoading("loading branches")
+		return LoadBranchesEffect{}
+	case AllBranchesDeletedResult:
+		if msg.Err != nil {
+			a.clearLoading()
+			a.appendStatus(StatusError, msg.Err.Error())
+			return nil
+		}
+		a.markLoadingDone()
+		if len(msg.Deleted) == 0 {
+			a.appendStatus(StatusInfo, "no local branches deleted")
+		} else {
+			a.appendStatus(StatusSuccess, fmt.Sprintf("deleted %d local branches", len(msg.Deleted)))
+		}
+		if len(msg.Skipped) > 0 {
+			a.appendStatus(StatusInfo, fmt.Sprintf("skipped checked out branches: %s", strings.Join(msg.Skipped, ", ")))
+		}
+		a.setLoading("loading branches")
+		return LoadBranchesEffect{}
+	case BranchesFetchedResult:
+		if msg.Err != nil {
+			a.clearLoading()
+			a.appendStatus(StatusError, msg.Err.Error())
+			return nil
+		}
+		a.markLoadingDone()
+		a.appendStatus(StatusSuccess, "fetch complete")
+		a.setLoading("loading branches")
+		return LoadBranchesEffect{}
 	case BranchCheckedResult:
 		if msg.Err != nil {
 			a.appendStatus(StatusError, msg.Err.Error())

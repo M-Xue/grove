@@ -1,6 +1,11 @@
 package app
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	branchsvc "github.com/M-Xue/grove/branch"
+)
 
 func TestRequestSubmitSelectedPathSetsOutput(t *testing.T) {
 	a := New(Services{})
@@ -80,5 +85,108 @@ func TestBranchCheckedPreservesCompletedCheckingPhase(t *testing.T) {
 	}
 	if state.Loading[1].Message != "adding worktree" || state.Loading[1].Completed {
 		t.Fatalf("expected active adding worktree entry, got %#v", state.Loading[1])
+	}
+}
+
+func TestRequestCheckoutBranchRequiresSelection(t *testing.T) {
+	a := New(Services{})
+	if effect := a.RequestCheckoutBranch(""); effect != nil {
+		t.Fatalf("expected nil effect, got %#v", effect)
+	}
+	if len(a.State().Statuses) != 1 {
+		t.Fatalf("expected one status, got %d", len(a.State().Statuses))
+	}
+}
+
+func TestRequestDeleteBranchRequiresSelection(t *testing.T) {
+	a := New(Services{})
+	if effect := a.RequestDeleteBranch(""); effect != nil {
+		t.Fatalf("expected nil effect, got %#v", effect)
+	}
+	if len(a.State().Statuses) != 1 {
+		t.Fatalf("expected one status, got %d", len(a.State().Statuses))
+	}
+}
+
+func TestRequestDeleteBranchOpensConfirmationDialog(t *testing.T) {
+	a := New(Services{})
+	if effect := a.RequestDeleteBranch("feature/a"); effect != nil {
+		t.Fatalf("expected nil effect, got %#v", effect)
+	}
+	state := a.State()
+	if !state.Dialog.Active {
+		t.Fatal("expected dialog to be active")
+	}
+	if state.Dialog.Kind != DialogConfirmDeleteBranch {
+		t.Fatalf("unexpected dialog kind: %q", state.Dialog.Kind)
+	}
+	if state.Dialog.Branch != "feature/a" {
+		t.Fatalf("unexpected dialog branch: %q", state.Dialog.Branch)
+	}
+}
+
+func TestDialogChooseDeleteBranchReturnsDeleteEffect(t *testing.T) {
+	a := New(Services{})
+	a.RequestDeleteBranch("feature/a")
+	effect := a.DialogChoose("confirm")
+	deleteEffect, ok := effect.(DeleteBranchEffect)
+	if !ok {
+		t.Fatalf("expected DeleteBranchEffect, got %#v", effect)
+	}
+	if deleteEffect.Name != "feature/a" {
+		t.Fatalf("unexpected branch name: %q", deleteEffect.Name)
+	}
+}
+
+func TestRequestDeleteAllBranchesRequiresLocalScope(t *testing.T) {
+	a := New(Services{})
+	a.state.BranchScope = branchsvc.ScopeRemoteTracking
+	if effect := a.RequestDeleteAllBranches(); effect != nil {
+		t.Fatalf("expected nil effect, got %#v", effect)
+	}
+	if len(a.State().Statuses) != 1 {
+		t.Fatalf("expected one status, got %d", len(a.State().Statuses))
+	}
+}
+
+func TestRequestDeleteAllBranchesRequiresLoadedBranches(t *testing.T) {
+	a := New(Services{})
+	a.state.BranchScope = branchsvc.ScopeLocal
+	if effect := a.RequestDeleteAllBranches(); effect != nil {
+		t.Fatalf("expected nil effect, got %#v", effect)
+	}
+	if len(a.State().Statuses) != 1 {
+		t.Fatalf("expected one status, got %d", len(a.State().Statuses))
+	}
+}
+
+func TestRequestDeleteAllBranchesOpensConfirmationDialog(t *testing.T) {
+	a := New(Services{})
+	a.state.BranchScope = branchsvc.ScopeLocal
+	a.state.Branches = []branchsvc.Info{{Name: "feature/a"}, {Name: "main"}}
+	if effect := a.RequestDeleteAllBranches(); effect != nil {
+		t.Fatalf("expected nil effect, got %#v", effect)
+	}
+	state := a.State()
+	if !state.Dialog.Active {
+		t.Fatal("expected dialog to be active")
+	}
+	if state.Dialog.Kind != DialogConfirmDeleteAllBranches {
+		t.Fatalf("unexpected dialog kind: %q", state.Dialog.Kind)
+	}
+	if !strings.Contains(state.Dialog.Description, "feature/a") || !strings.Contains(state.Dialog.Description, "main") {
+		t.Fatalf("unexpected dialog description: %q", state.Dialog.Description)
+	}
+}
+
+func TestDialogChooseDeleteAllBranchesReturnsDeleteEffect(t *testing.T) {
+	a := New(Services{})
+	a.state.BranchScope = branchsvc.ScopeLocal
+	a.state.Branches = []branchsvc.Info{{Name: "feature/a"}}
+	a.RequestDeleteAllBranches()
+	effect := a.DialogChoose("confirm")
+	_, ok := effect.(DeleteAllBranchesEffect)
+	if !ok {
+		t.Fatalf("expected DeleteAllBranchesEffect, got %#v", effect)
 	}
 }

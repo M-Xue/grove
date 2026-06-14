@@ -106,7 +106,7 @@ func (s *ChangeScreen) View(width, height int, state app.State) string {
 func (s *ChangeScreen) Footer(helpWidth int) string {
 	model := NewHelpModel()
 	model.Width = screenMax(helpWidth, 0)
-	order := []keys.Key{keys.KeyEnter, keys.KeyQuestion, keys.KeyCtrlA, keys.KeyCtrlD, keys.KeyUp, keys.KeyDown, keys.KeyEsc}
+	order := []keys.Key{keys.KeyEnter, keys.KeyQuestion, keys.KeyCtrlA, keys.KeyCtrlB, keys.KeyCtrlD, keys.KeyUp, keys.KeyDown, keys.KeyEsc}
 	return model.ShortHelpView(s.defaultHandlers.HelpBindings(order))
 }
 
@@ -121,6 +121,7 @@ func (s *ChangeScreen) initHandlers() {
 	s.defaultHandlers = BindingSet{
 		keys.KeyEnter:    {Key: keys.KeyEnter, Handler: s.handleEnter, Help: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open"))},
 		keys.KeyCtrlA:    {Key: keys.KeyCtrlA, Handler: s.handleOpenAdd, Help: key.NewBinding(key.WithKeys("ctrl+a"), key.WithHelp("ctrl+a", "add"))},
+		keys.KeyCtrlB:    {Key: keys.KeyCtrlB, Handler: s.handleOpenBranches, Help: key.NewBinding(key.WithKeys("ctrl+b"), key.WithHelp("ctrl+b", "branches"))},
 		keys.KeyCtrlD:    {Key: keys.KeyCtrlD, Handler: s.handleStartRemove, Help: key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "remove"))},
 		keys.KeyQuestion: {Key: keys.KeyQuestion, Handler: s.handleOpenDocs, Help: key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "docs"))},
 		keys.KeyUp:       {Key: keys.KeyUp, Handler: nil, Help: key.NewBinding(key.WithKeys("up", "shift+tab"), key.WithHelp("↑/shift+tab", "move"))},
@@ -162,6 +163,10 @@ func (s *ChangeScreen) handleStartRemove(ctx *ScreenContext, msg tea.KeyMsg) tea
 
 func (s *ChangeScreen) handleOpenDocs(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
 	return ctx.RunEffect(ctx.App.OpenDocs())
+}
+
+func (s *ChangeScreen) handleOpenBranches(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
+	return ctx.RunEffect(ctx.App.OpenBranch())
 }
 
 func (s *ChangeScreen) handleQuit(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {

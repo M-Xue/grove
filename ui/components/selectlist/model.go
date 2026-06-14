@@ -92,6 +92,18 @@ func (m *Model) View(height int) string {
 	return strings.Join(lines, "\n")
 }
 
+func (m *Model) VisibleItems(height int) []Item {
+	if height <= 0 {
+		height = 1
+	}
+	m.syncScroll(height)
+	if len(m.items) == 0 {
+		return nil
+	}
+	end := min(len(m.items), m.scroll+height)
+	return append([]Item(nil), m.items[m.scroll:end]...)
+}
+
 func (m *Model) syncSelection() {
 	if len(m.items) == 0 {
 		m.selected = 0
