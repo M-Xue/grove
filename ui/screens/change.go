@@ -175,6 +175,13 @@ func (s *ChangeScreen) handleCancelDialog(ctx *ScreenContext, msg tea.KeyMsg) te
 	return nil
 }
 
+func (s *ChangeScreen) Reset() {
+	s.search.Clear()
+	s.search.Focus()
+	s.dialogSignature = ""
+	s.list.SetItems(toItems(s.worktrees))
+}
+
 func filterItems(items []selectlist.Item, query string) []selectlist.Item {
 	query = strings.TrimSpace(strings.ToLower(query))
 	if query == "" {

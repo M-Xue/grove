@@ -158,6 +158,15 @@ func (s *AddScreen) handleCancelDialog(ctx *ScreenContext, msg tea.KeyMsg) tea.C
 	return nil
 }
 
+func (s *AddScreen) Reset() {
+	s.path.Clear()
+	s.branch.Clear()
+	s.focusedPath = true
+	s.dialogSignature = ""
+	s.path.Focus()
+	s.branch.Blur()
+}
+
 func addDialogSignature(state app.DialogState) string {
 	parts := []string{string(state.Kind), state.Title, state.Description, state.FocusedID}
 	for _, button := range state.Buttons {

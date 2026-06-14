@@ -22,6 +22,7 @@ type Model struct {
 	app     *app.App
 	width   int
 	height  int
+	screen  app.ScreenID
 	loading loading.Model
 	status  status.Model
 	change  *screens.ChangeScreen
@@ -32,6 +33,7 @@ type Model struct {
 func New(application *app.App) *Model {
 	return &Model{
 		app:     application,
+		screen:  application.State().Screen,
 		loading: loading.New(),
 		status:  status.New(),
 		change:  screens.NewChangeScreen(),
@@ -51,8 +53,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 	case effectMsg:
+		previousScreen := m.screen
+		effect := m.app.HandleResult(msg.result)
+		m.syncScreenTransitions(previousScreen, m.app.State().Screen)
 		m.syncScreens()
-		return m, m.runEffect(m.app.HandleResult(msg.result))
+		return m, m.runEffect(effect)
 	case tea.KeyMsg:
 		m.app.DismissCompletedLoading()
 		if len(m.app.State().Statuses) > 0 {
@@ -69,6 +74,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		default:
 			cmd = m.change.Update(ctx, msg, m.app.State())
 		}
+		m.syncScreenTransitions(m.screen, m.app.State().Screen)
 		m.syncScreens()
 		return m, cmd
 	default:
@@ -143,6 +149,19 @@ func (m *Model) syncScreens() {
 	m.change.Sync(state)
 	m.add.Sync(state)
 	m.docs.Sync(state)
+	m.screen = state.Screen
+}
+
+func (m *Model) syncScreenTransitions(previous, current app.ScreenID) {
+	if previous == current {
+		return
+	}
+	if previous == app.ScreenAdd {
+		m.add.Reset()
+	}
+	if previous == app.ScreenChange {
+		m.change.Reset()
+	}
 }
 
 func (m *Model) runEffect(effect app.Effect) tea.Cmd {
