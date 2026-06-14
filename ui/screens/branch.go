@@ -61,6 +61,8 @@ func (s *BranchScreen) Sync(state app.State) {
 	s.list.SetItems(filtered)
 	if selectedID != "" {
 		s.list.SetSelectedID(selectedID)
+	} else if state.Branch.SelectedName != "" {
+		s.list.SetSelectedID(state.Branch.SelectedName)
 	}
 	if state.Dialog.Active {
 		signature := dialogSignature(state.Dialog)
@@ -97,27 +99,47 @@ func (s *BranchScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.Stat
 	}
 	if consumed, cmd := s.search.Update(msg); consumed {
 		s.list.SetItems(filterItems(toBranchSelectItems(s.branches), s.search.Value()))
-		return cmd
+		return tea.Batch(cmd, s.selectionEffect(ctx))
 	}
 	if consumed, cmd := s.list.Update(msg); consumed {
-		return cmd
+		return tea.Batch(cmd, s.selectionEffect(ctx))
 	}
 	return nil
 }
 
 func (s *BranchScreen) View(width, height int, state app.State) string {
+	leftWidth := branchMax(20, width/2)
+	rightWidth := branchMax(20, width-leftWidth-3)
 	header := []string{
 		"grove",
 		"",
-		lipgloss.NewStyle().Bold(true).Render("Switch branch"),
-		fmt.Sprintf("Showing %s branches", scopeLabel(state.BranchScope)),
-		"",
-		s.search.View(),
+		fitLine(lipgloss.NewStyle().Bold(true).Render("Switch branch"), leftWidth) + "   " + fitLine(lipgloss.NewStyle().Bold(true).Render("Recent commits"), rightWidth),
+		fitLine(fmt.Sprintf("Showing %s branches", scopeLabel(state.BranchScope)), leftWidth) + "   " + fitLine(branchLabel(state.Branch.SelectedName), rightWidth),
+		fitLine(s.search.View(), leftWidth) + "   " + fitLine("", rightWidth),
 		"",
 	}
 	listHeight := screenMax(1, branchMin(maxVisibleBranches, height-len(header)))
-	body := s.list.View(listHeight)
-	content := strings.Join(append(header, strings.Split(body, "\n")...), "\n")
+	leftBody := s.list.View(listHeight)
+	rightBody := s.commitsView(rightWidth, listHeight, state)
+	leftLines := strings.Split(leftBody, "\n")
+	rightLines := strings.Split(rightBody, "\n")
+	bodyLines := make([]string, 0, listHeight)
+	for i := 0; i < listHeight; i++ {
+		leftLine := ""
+		if i < len(leftLines) {
+			leftLine = fitLine(leftLines[i], leftWidth)
+		} else {
+			leftLine = fitLine("", leftWidth)
+		}
+		rightLine := ""
+		if i < len(rightLines) {
+			rightLine = fitLine(rightLines[i], rightWidth)
+		} else {
+			rightLine = fitLine("", rightWidth)
+		}
+		bodyLines = append(bodyLines, leftLine+"   "+rightLine)
+	}
+	content := strings.Join(append(header, bodyLines...), "\n")
 	if state.Dialog.Active {
 		return overlayDialog(content, s.dialog.View(width, height), width, height)
 	}
@@ -135,8 +157,7 @@ func (s *BranchScreen) Footer(helpWidth int, scope branchsvc.Scope) string {
 	if scope == branchsvc.ScopeRemoteTracking {
 		scopeHelp = "local"
 	}
-	bindings := s.defaultHandlers.HelpBindings([]keys.Key{keys.KeyEnter, keys.KeyCtrlD, keys.KeyCtrlF, keys.KeyCtrlO, keys.KeyUp, keys.KeyDown, keys.KeyEsc})
-	bindings = s.defaultHandlers.HelpBindings([]keys.Key{keys.KeyEnter, keys.KeyCtrlD, keys.KeyCtrlShiftD, keys.KeyCtrlF, keys.KeyCtrlO, keys.KeyUp, keys.KeyDown, keys.KeyEsc})
+	bindings := s.defaultHandlers.HelpBindings([]keys.Key{keys.KeyEnter, keys.KeyCtrlD, keys.KeyCtrlShiftD, keys.KeyCtrlF, keys.KeyCtrlO, keys.KeyUp, keys.KeyDown, keys.KeyEsc})
 	if len(bindings) >= 5 {
 		bindings[4] = key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("ctrl+o", scopeHelp))
 	}
@@ -219,6 +240,29 @@ func (s *BranchScreen) handleQuit(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
 	return ctx.Quit()
 }
 
+func (s *BranchScreen) selectionEffect(ctx *ScreenContext) tea.Cmd {
+	item, ok := s.list.SelectedItem()
+	if !ok {
+		return ctx.RunEffect(ctx.App.SelectBranch(""))
+	}
+	return ctx.RunEffect(ctx.App.SelectBranch(item.ID))
+}
+
+func (s *BranchScreen) commitsView(width, height int, state app.State) string {
+	lines := []string{}
+	if len(state.Branch.Commits) == 0 {
+		lines = append(lines, "No commits")
+		return strings.Join(lines, "\n")
+	}
+	for _, commit := range state.Branch.Commits {
+		author := truncateText(commit.Author, 8)
+		subjectWidth := branchMax(8, width-branchMax(0, lipgloss.Width(commit.Hash)+lipgloss.Width(author)+6))
+		subject := truncateText(commit.Subject, subjectWidth)
+		lines = append(lines, fitLine(commit.Hash+"  "+author+"  "+subject, width))
+	}
+	return strings.Join(lines, "\n")
+}
+
 func toBranchSelectItems(branches []branchItem) []selectlist.Item {
 	items := make([]selectlist.Item, 0, len(branches))
 	for _, branch := range branches {
@@ -239,4 +283,35 @@ func branchMin(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func branchMax(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func truncateText(value string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	if lipgloss.Width(value) <= width {
+		return value
+	}
+	if width <= 3 {
+		return value[:width]
+	}
+	trimmed := value
+	for lipgloss.Width(trimmed) > width-3 && len(trimmed) > 0 {
+		trimmed = trimmed[:len(trimmed)-1]
+	}
+	return trimmed + "..."
+}
+
+func branchLabel(name string) string {
+	if name == "" {
+		return ""
+	}
+	return "Branch: " + name
 }

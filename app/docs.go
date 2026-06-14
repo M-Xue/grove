@@ -1,6 +1,7 @@
 package app
 
 import (
+	branchsvc "github.com/M-Xue/grove/branch"
 	"fmt"
 	"strings"
 )
@@ -71,6 +72,27 @@ func (a *App) HandleResult(result Result) Effect {
 		}
 		a.state.Branches = msg.Branches
 		a.state.BranchScope = msg.Scope
+		a.markLoadingDone()
+		if len(msg.Branches) == 0 {
+			a.state.Branch.SelectedName = ""
+			a.state.Branch.Commits = nil
+			return nil
+		}
+		selected := a.state.Branch.SelectedName
+		if selected == "" || !hasBranch(msg.Branches, selected) {
+			selected = msg.Branches[0].Name
+		}
+		a.state.Branch.SelectedName = selected
+		a.setLoading("loading branch commits")
+		return LoadBranchCommitsEffect{Name: selected, Limit: branchCommitPreviewLimit}
+	case BranchCommitsLoadedResult:
+		if msg.Err != nil {
+			a.clearLoading()
+			a.appendStatus(StatusError, msg.Err.Error())
+			return nil
+		}
+		a.state.Branch.SelectedName = msg.Name
+		a.state.Branch.Commits = msg.Commits
 		a.markLoadingDone()
 		return nil
 	case BranchCheckedOutResult:
@@ -176,4 +198,13 @@ func (a *App) HandleResult(result Result) Effect {
 	default:
 		return nil
 	}
+}
+
+func hasBranch(branches []branchsvc.Info, name string) bool {
+	for _, branch := range branches {
+		if branch.Name == name {
+			return true
+		}
+	}
+	return false
 }

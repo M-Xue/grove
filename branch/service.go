@@ -20,6 +20,12 @@ type Info struct {
 	CheckedOutElsewhere bool
 }
 
+type CommitInfo struct {
+	Hash    string
+	Author  string
+	Subject string
+}
+
 type DeleteAllSummary struct {
 	Deleted []string
 	Skipped []string
@@ -31,6 +37,7 @@ type Runner interface {
 
 type Service interface {
 	List() ([]Info, Scope, error)
+	RecentCommits(name string, limit int) ([]CommitInfo, error)
 	ToggleScope() Scope
 	Checkout(name string) error
 	Delete(name string) error
@@ -101,6 +108,48 @@ func (s *service) Delete(name string) error {
 
 	_, err := s.runner.CombinedOutput("git", "branch", "-d", name)
 	return err
+}
+
+func (s *service) RecentCommits(name string, limit int) ([]CommitInfo, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, fmt.Errorf("branch name is required")
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+
+	output, err := s.runner.CombinedOutput(
+		"git",
+		"log",
+		fmt.Sprintf("-n%d", limit),
+		"--format=%h%x1f%an%x1f%s",
+		name,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	trimmed := strings.TrimSpace(string(output))
+	if trimmed == "" {
+		return nil, nil
+	}
+
+	lines := strings.Split(trimmed, "\n")
+	commits := make([]CommitInfo, 0, len(lines))
+	for _, line := range lines {
+		parts := strings.SplitN(line, "\x1f", 3)
+		if len(parts) != 3 {
+			continue
+		}
+		commits = append(commits, CommitInfo{
+			Hash:    strings.TrimSpace(parts[0]),
+			Author:  strings.TrimSpace(parts[1]),
+			Subject: strings.TrimSpace(parts[2]),
+		})
+	}
+
+	return commits, nil
 }
 
 func (s *service) DeleteAllLocal() (DeleteAllSummary, error) {

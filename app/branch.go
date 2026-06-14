@@ -2,6 +2,8 @@ package app
 
 import "strings"
 
+const branchCommitPreviewLimit = 10
+
 func (a *App) OpenBranch() Effect {
 	a.state.Screen = ScreenBranch
 	a.clearDialog()
@@ -63,6 +65,21 @@ func (a *App) RequestDeleteAllBranches() Effect {
 		Kind:        DialogConfirmDeleteAllBranches,
 	}
 	return nil
+}
+
+func (a *App) SelectBranch(name string) Effect {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		a.state.Branch.SelectedName = ""
+		a.state.Branch.Commits = nil
+		return nil
+	}
+	if a.state.Branch.SelectedName == name && len(a.state.Branch.Commits) > 0 {
+		return nil
+	}
+	a.state.Branch.SelectedName = name
+	a.setLoading("loading branch commits")
+	return LoadBranchCommitsEffect{Name: name, Limit: branchCommitPreviewLimit}
 }
 
 func (a *App) RequestDeleteBranch(name string) Effect {
