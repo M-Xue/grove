@@ -13,6 +13,11 @@ import (
 
 type effectMsg struct{ result app.Result }
 
+const (
+	horizontalPadding = 4
+	verticalPadding   = 2
+)
+
 type Model struct {
 	app     *app.App
 	width   int
@@ -74,14 +79,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) View() string {
 	state := m.app.State()
 	m.syncScreens()
-	contentWidth := max(0, m.width-8)
+	contentWidth := max(0, m.width-horizontalPadding*2)
 	footer := m.footer(contentWidth, state)
 	loadingLines := m.loading.View(state.Loading, contentWidth)
 	statusLines := m.status.View(state.Statuses, contentWidth)
-	reservedBottom := 1
+	reservedBottom := 2
 	reservedBottom += len(loadingLines)
 	reservedBottom += len(statusLines)
-	bodyHeight := max(0, m.height-reservedBottom)
+	contentHeight := max(0, m.height-verticalPadding*2)
+	bodyHeight := max(0, contentHeight-reservedBottom)
 	var body string
 	switch state.Screen {
 	case app.ScreenAdd:
@@ -92,7 +98,7 @@ func (m *Model) View() string {
 		body = m.change.View(contentWidth, bodyHeight, state)
 	}
 	bodyLines := fitBody(body, contentWidth, bodyHeight)
-	lines := make([]string, 0, len(bodyLines)+reservedBottom)
+	lines := make([]string, 0, contentHeight)
 	lines = append(lines, bodyLines...)
 	for _, line := range loadingLines {
 		lines = append(lines, fitBottomLine(line, contentWidth))
@@ -100,8 +106,32 @@ func (m *Model) View() string {
 	for _, line := range statusLines {
 		lines = append(lines, fitBottomLine(line, contentWidth))
 	}
+	lines = append(lines, fitBottomLine("", contentWidth))
 	lines = append(lines, fitBottomLine(footer, contentWidth))
-	return strings.Join(lines, "\n")
+	for len(lines) < contentHeight {
+		lines = append(lines, fitBottomLine("", contentWidth))
+	}
+	if len(lines) > contentHeight {
+		lines = lines[:contentHeight]
+	}
+
+	padded := make([]string, 0, m.height)
+	blankLine := strings.Repeat(" ", max(m.width, 0))
+	for i := 0; i < verticalPadding; i++ {
+		padded = append(padded, blankLine)
+	}
+	leftPad := strings.Repeat(" ", horizontalPadding)
+	for _, line := range lines {
+		padded = append(padded, leftPad+fitBottomLine(line, contentWidth))
+	}
+	for len(padded) < m.height {
+		padded = append(padded, blankLine)
+	}
+	if len(padded) > m.height {
+		padded = padded[:m.height]
+	}
+
+	return strings.Join(padded, "\n")
 }
 
 func (m *Model) SubmittedPath() string {

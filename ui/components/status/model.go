@@ -38,7 +38,7 @@ func (Model) View(items []app.StatusEntry, width int) []string {
 		if width > 0 {
 			line = lipgloss.NewStyle().MaxWidth(width).Render(line)
 		}
-		lines = append(lines, lipgloss.NewStyle().BorderLeft(true).BorderForeground(borderColor).PaddingLeft(1).Render(line))
+		lines = append(lines, lipgloss.NewStyle().BorderLeft(true).BorderForeground(borderColor).Render(line))
 	}
 	return lines
 }
