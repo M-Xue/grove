@@ -78,15 +78,15 @@ func (s *ChangeScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.Stat
 		}
 		return nil
 	}
+	if handler, ok := s.defaultHandlers.HandlerFor(keys.Normalize(msg)); ok && handler != nil {
+		return handler(ctx, msg)
+	}
 	if consumed, cmd := s.search.Update(msg); consumed {
 		s.list.SetItems(filterItems(toItems(s.worktrees), s.search.Value()))
 		return cmd
 	}
 	if consumed, cmd := s.list.Update(msg); consumed {
 		return cmd
-	}
-	if handler, ok := s.defaultHandlers.HandlerFor(keys.Normalize(msg)); ok {
-		return handler(ctx, msg)
 	}
 	return nil
 }
