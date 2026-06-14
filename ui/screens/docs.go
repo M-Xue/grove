@@ -22,10 +22,10 @@ func NewDocsScreen() *DocsScreen {
 		keys.KeyQ:        {Key: keys.KeyQ, Handler: s.handleClose, Help: key.NewBinding(key.WithKeys("esc", "q", "?"), key.WithHelp("esc", "close"))},
 		keys.KeyQuestion: {Key: keys.KeyQuestion, Handler: s.handleClose, Help: key.NewBinding(key.WithKeys("esc", "q", "?"), key.WithHelp("esc", "close"))},
 		keys.KeyCtrlC:    {Key: keys.KeyCtrlC, Handler: s.handleQuit, Help: key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit"))},
-		keys.KeyUp:       {Key: keys.KeyUp, Handler: s.handleUp, Help: key.NewBinding(key.WithKeys("up", "shift+tab"), key.WithHelp("↑", "scroll"))},
-		keys.KeyDown:     {Key: keys.KeyDown, Handler: s.handleDown, Help: key.NewBinding(key.WithKeys("down", "tab"), key.WithHelp("↓", "scroll"))},
-		keys.KeyTab:      {Key: keys.KeyTab, Handler: s.handleDown, Help: key.NewBinding(key.WithKeys("down", "tab"), key.WithHelp("↓", "scroll"))},
-		keys.KeyShiftTab: {Key: keys.KeyShiftTab, Handler: s.handleUp, Help: key.NewBinding(key.WithKeys("up", "shift+tab"), key.WithHelp("↑", "scroll"))},
+		keys.KeyUp:       {Key: keys.KeyUp, Handler: s.handleUp, Help: key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "scroll"))},
+		keys.KeyK:        {Key: keys.KeyK, Handler: s.handleUp, Help: key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "scroll"))},
+		keys.KeyDown:     {Key: keys.KeyDown, Handler: s.handleDown, Help: key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "scroll"))},
+		keys.KeyJ:        {Key: keys.KeyJ, Handler: s.handleDown, Help: key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "scroll"))},
 	}
 	return s
 }
