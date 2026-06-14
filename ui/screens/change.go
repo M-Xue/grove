@@ -74,7 +74,7 @@ func (s *ChangeScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.Stat
 				return cmd
 			}
 		}
-		if handler, ok := s.confirmHandlers.HandlerFor(keys.Normalize(msg)); ok {
+		if handler, ok := s.confirmHandlers.HandlerFor(keys.Normalize(msg)); ok && handler != nil {
 			return handler(ctx, msg)
 		}
 		return nil
@@ -113,7 +113,7 @@ func (s *ChangeScreen) Footer(helpWidth int) string {
 func (s *ChangeScreen) DialogFooter(helpWidth int) string {
 	model := NewHelpModel()
 	model.Width = screenMax(helpWidth, 0)
-	order := []keys.Key{keys.KeyEnter, keys.KeyEsc, keys.KeyCtrlC}
+	order := []keys.Key{keys.KeyEnter, keys.KeyTab, keys.KeyEsc, keys.KeyCtrlC}
 	return model.ShortHelpView(s.confirmHandlers.HelpBindings(order))
 }
 
@@ -123,15 +123,17 @@ func (s *ChangeScreen) initHandlers() {
 		keys.KeyCtrlA:    {Key: keys.KeyCtrlA, Handler: s.handleOpenAdd, Help: key.NewBinding(key.WithKeys("ctrl+a"), key.WithHelp("ctrl+a", "add"))},
 		keys.KeyCtrlD:    {Key: keys.KeyCtrlD, Handler: s.handleStartRemove, Help: key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "remove"))},
 		keys.KeyQuestion: {Key: keys.KeyQuestion, Handler: s.handleOpenDocs, Help: key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "docs"))},
-		keys.KeyUp:       {Key: keys.KeyUp, Handler: nil, Help: key.NewBinding(key.WithKeys("up", "shift+tab"), key.WithHelp("up/shift+tab", "move"))},
-		keys.KeyDown:     {Key: keys.KeyDown, Handler: nil, Help: key.NewBinding(key.WithKeys("down", "tab"), key.WithHelp("down/tab", "move"))},
+		keys.KeyUp:       {Key: keys.KeyUp, Handler: nil, Help: key.NewBinding(key.WithKeys("up", "shift+tab"), key.WithHelp("↑/shift+tab", "move"))},
+		keys.KeyDown:     {Key: keys.KeyDown, Handler: nil, Help: key.NewBinding(key.WithKeys("down", "tab"), key.WithHelp("↓/tab", "move"))},
 		keys.KeyEsc:      {Key: keys.KeyEsc, Handler: s.handleQuit, Help: key.NewBinding(key.WithKeys("esc", "ctrl+c"), key.WithHelp("esc", "quit"))},
 		keys.KeyCtrlC:    {Key: keys.KeyCtrlC, Handler: s.handleQuit, Help: key.NewBinding(key.WithKeys("esc", "ctrl+c"), key.WithHelp("esc", "quit"))},
 	}
 	s.confirmHandlers = BindingSet{
-		keys.KeyEnter: {Key: keys.KeyEnter, Handler: s.handleConfirmDialog, Help: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "confirm"))},
-		keys.KeyEsc:   {Key: keys.KeyEsc, Handler: s.handleCancelDialog, Help: key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel"))},
-		keys.KeyCtrlC: {Key: keys.KeyCtrlC, Handler: s.handleQuit, Help: key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit"))},
+		keys.KeyEnter:    {Key: keys.KeyEnter, Handler: s.handleConfirmDialog, Help: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "confirm"))},
+		keys.KeyTab:      {Key: keys.KeyTab, Handler: nil, Help: key.NewBinding(key.WithKeys("tab", "shift+tab"), key.WithHelp("tab", "move"))},
+		keys.KeyShiftTab: {Key: keys.KeyShiftTab, Handler: nil, Help: key.NewBinding(key.WithKeys("tab", "shift+tab"), key.WithHelp("tab", "move"))},
+		keys.KeyEsc:      {Key: keys.KeyEsc, Handler: s.handleCancelDialog, Help: key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel"))},
+		keys.KeyCtrlC:    {Key: keys.KeyCtrlC, Handler: s.handleQuit, Help: key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit"))},
 	}
 }
 

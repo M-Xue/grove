@@ -50,10 +50,10 @@ func (m *Model) Update(msg tea.KeyMsg) (bool, tea.Cmd) {
 		return false, nil
 	}
 	switch msg.String() {
-	case "left", "shift+tab":
+	case "shift+tab":
 		m.move(-1)
 		return true, nil
-	case "right", "tab":
+	case "tab":
 		m.move(1)
 		return true, nil
 	default:
