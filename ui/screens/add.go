@@ -9,6 +9,7 @@ import (
 	"github.com/M-Xue/grove/ui/keys"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type AddScreen struct {
@@ -80,7 +81,7 @@ func (s *AddScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.State) 
 }
 
 func (s *AddScreen) View(width, height int, state app.State) string {
-	header := []string{"grove", "", "Add worktree", "", s.path.View(), s.branch.View()}
+	header := []string{"grove", "", lipgloss.NewStyle().Bold(true).Render("Add worktree"), "", s.path.View(), s.branch.View()}
 	content := strings.Join(header, "\n")
 	if state.Dialog.Active {
 		return overlayDialog(content, s.dialog.View(width, height), width, height)

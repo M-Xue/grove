@@ -7,6 +7,7 @@ import (
 	"github.com/M-Xue/grove/ui/keys"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type DocsScreen struct {
@@ -45,7 +46,7 @@ func (s *DocsScreen) View(width, height int, state app.State) string {
 		s.scroll = maxScroll
 	}
 	end := min(len(state.DocsLines), s.scroll+visible)
-	lines := []string{"grove", "", "Docs", ""}
+	lines := []string{"grove", "", lipgloss.NewStyle().Bold(true).Render("Docs"), ""}
 	lines = append(lines, state.DocsLines[s.scroll:end]...)
 	return strings.Join(lines, "\n")
 }

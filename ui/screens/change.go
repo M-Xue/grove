@@ -10,6 +10,7 @@ import (
 	"github.com/M-Xue/grove/ui/keys"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type ChangeScreen struct {
@@ -92,7 +93,7 @@ func (s *ChangeScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.Stat
 }
 
 func (s *ChangeScreen) View(width, height int, state app.State) string {
-	header := []string{"grove", "", "Change worktree", "", s.search.View(), ""}
+	header := []string{"grove", "", lipgloss.NewStyle().Bold(true).Render("Change worktree"), "", s.search.View(), ""}
 	body := s.list.View(screenMax(1, height-len(header)))
 	contentLines := append(header, strings.Split(body, "\n")...)
 	content := strings.Join(contentLines, "\n")
