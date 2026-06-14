@@ -79,11 +79,8 @@ func (s *AddScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.State) 
 	return nil
 }
 
-func (s *AddScreen) View(width, height int, footer string, state app.State) string {
+func (s *AddScreen) View(width, height int, state app.State) string {
 	header := []string{"grove", "", "Add worktree", "", s.path.View(), s.branch.View()}
-	if footer != "" {
-		header = append(header, "", footer)
-	}
 	content := strings.Join(header, "\n")
 	if state.Dialog.Active {
 		return overlayDialog(content, s.dialog.View(width, height), width, height)

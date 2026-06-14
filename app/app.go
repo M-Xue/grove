@@ -1,9 +1,9 @@
 package app
 
 type App struct {
-	services      Services
-	state         State
-	statusCounter int
+	services       Services
+	state          State
+	loadingCounter int
 }
 
 func New(services Services) *App {
@@ -36,6 +36,16 @@ func (a *App) DismissDialog() {
 	a.clearDialog()
 }
 
-func (a *App) DismissStatuses() {
-	a.state.Statuses = nil
+func (a *App) DismissCompletedLoading() {
+	if len(a.state.Loading) == 0 {
+		return
+	}
+	filtered := a.state.Loading[:0]
+	for _, entry := range a.state.Loading {
+		if entry.Active && entry.Completed {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	a.state.Loading = filtered
 }

@@ -5,7 +5,7 @@ func (a *App) OpenAdd() {
 	if a.state.Dialog.Active {
 		a.clearDialog()
 	}
-	if a.state.Loading.Active {
+	if len(a.state.Loading) > 0 {
 		a.clearLoading()
 	}
 }

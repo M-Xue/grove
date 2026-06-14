@@ -8,6 +8,7 @@ import (
 	"github.com/M-Xue/grove/ui/components/status"
 	"github.com/M-Xue/grove/ui/screens"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type effectMsg struct{ result app.Result }
@@ -48,6 +49,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.syncScreens()
 		return m, m.runEffect(m.app.HandleResult(msg.result))
 	case tea.KeyMsg:
+		m.app.DismissCompletedLoading()
 		if len(m.app.State().Statuses) > 0 {
 			m.app.DismissStatuses()
 		}
@@ -73,32 +75,32 @@ func (m *Model) View() string {
 	state := m.app.State()
 	m.syncScreens()
 	contentWidth := max(0, m.width-8)
-	contentHeight := max(0, m.height-4)
+	footer := m.footer(contentWidth, state)
+	loadingLines := m.loading.View(state.Loading, contentWidth)
+	statusLines := m.status.View(state.Statuses, contentWidth)
+	reservedBottom := 1
+	reservedBottom += len(loadingLines)
+	reservedBottom += len(statusLines)
+	bodyHeight := max(0, m.height-reservedBottom)
 	var body string
-	var footer string
 	switch state.Screen {
 	case app.ScreenAdd:
-		footer = m.add.Footer(contentWidth, state.Dialog.Active)
-		body = m.add.View(contentWidth, contentHeight, footer, state)
+		body = m.add.View(contentWidth, bodyHeight, state)
 	case app.ScreenDocs:
-		footer = m.docs.Footer(contentWidth)
-		body = m.docs.View(contentWidth, contentHeight, footer, state)
+		body = m.docs.View(contentWidth, bodyHeight, state)
 	default:
-		if state.Dialog.Active {
-			footer = m.change.DialogFooter(contentWidth)
-		} else {
-			footer = m.change.Footer(contentWidth)
-		}
-		body = m.change.View(contentWidth, contentHeight, contentHeight, footer, state)
+		body = m.change.View(contentWidth, bodyHeight, state)
 	}
-	lines := []string{body}
-	if state.Loading.Active {
-		lines = append(lines, "", m.loading.View(state.Loading.Message, contentWidth))
+	bodyLines := fitBody(body, contentWidth, bodyHeight)
+	lines := make([]string, 0, len(bodyLines)+reservedBottom)
+	lines = append(lines, bodyLines...)
+	for _, line := range loadingLines {
+		lines = append(lines, fitBottomLine(line, contentWidth))
 	}
-	if len(state.Statuses) > 0 {
-		lines = append(lines, "")
-		lines = append(lines, m.status.View(state.Statuses, contentWidth)...)
+	for _, line := range statusLines {
+		lines = append(lines, fitBottomLine(line, contentWidth))
 	}
+	lines = append(lines, fitBottomLine(footer, contentWidth))
 	return strings.Join(lines, "\n")
 }
 
@@ -160,4 +162,42 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func fitBody(content string, width, height int) []string {
+	lines := strings.Split(content, "\n")
+	result := make([]string, 0, height)
+	for i := 0; i < height; i++ {
+		line := ""
+		if i < len(lines) {
+			line = lines[i]
+		}
+		result = append(result, fitBottomLine(line, width))
+	}
+	return result
+}
+
+func fitBottomLine(content string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	contentWidth := lipgloss.Width(content)
+	if contentWidth > width {
+		return lipgloss.NewStyle().MaxWidth(width).Render(content)
+	}
+	return content + strings.Repeat(" ", width-contentWidth)
+}
+
+func (m *Model) footer(contentWidth int, state app.State) string {
+	switch state.Screen {
+	case app.ScreenAdd:
+		return m.add.Footer(contentWidth, state.Dialog.Active)
+	case app.ScreenDocs:
+		return m.docs.Footer(contentWidth)
+	default:
+		if state.Dialog.Active {
+			return m.change.DialogFooter(contentWidth)
+		}
+		return m.change.Footer(contentWidth)
+	}
 }
