@@ -38,8 +38,8 @@ func (s *DocsScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.State)
 	return nil
 }
 
-func (s *DocsScreen) View(width, height int, footer string, state app.State) string {
-	visible := screenMax(1, height-6)
+func (s *DocsScreen) View(width, height int, state app.State) string {
+	visible := screenMax(1, height-4)
 	maxScroll := screenMax(0, len(state.DocsLines)-visible)
 	if s.scroll > maxScroll {
 		s.scroll = maxScroll
@@ -47,9 +47,6 @@ func (s *DocsScreen) View(width, height int, footer string, state app.State) str
 	end := min(len(state.DocsLines), s.scroll+visible)
 	lines := []string{"grove", "", "Docs", ""}
 	lines = append(lines, state.DocsLines[s.scroll:end]...)
-	if footer != "" {
-		lines = append(lines, "", footer)
-	}
 	return strings.Join(lines, "\n")
 }
 

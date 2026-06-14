@@ -13,14 +13,6 @@ const (
 	ScreenDocs   ScreenID = "docs"
 )
 
-type StatusKind string
-
-const (
-	StatusInfo    StatusKind = "info"
-	StatusSuccess StatusKind = "success"
-	StatusError   StatusKind = "error"
-)
-
 type DialogKind string
 
 const (
@@ -34,9 +26,11 @@ type Services struct {
 	Docs     docs.Service
 }
 
-type LoadingState struct {
-	Active  bool
-	Message string
+type LoadingEntry struct {
+	ID        string
+	Active    bool
+	Completed bool
+	Message   string
 }
 
 type DialogButton struct {
@@ -55,12 +49,6 @@ type DialogState struct {
 	Branch      string
 }
 
-type StatusEntry struct {
-	ID      string
-	Kind    StatusKind
-	Message string
-}
-
 type ChangeState struct{}
 
 type AddState struct{}
@@ -72,7 +60,7 @@ type State struct {
 	SubmittedPath string
 	Worktrees     []worktree.WorktreeInfo
 	DocsLines     []string
-	Loading       LoadingState
+	Loading       []LoadingEntry
 	Dialog        DialogState
 	Statuses      []StatusEntry
 

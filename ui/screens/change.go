@@ -91,13 +91,10 @@ func (s *ChangeScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.Stat
 	return nil
 }
 
-func (s *ChangeScreen) View(width, height int, bodyHeight int, footer string, state app.State) string {
+func (s *ChangeScreen) View(width, height int, state app.State) string {
 	header := []string{"grove", "", "Change worktree", "", s.search.View(), ""}
-	body := s.list.View(screenMax(1, bodyHeight-len(header)))
+	body := s.list.View(screenMax(1, height-len(header)))
 	contentLines := append(header, strings.Split(body, "\n")...)
-	if footer != "" {
-		contentLines = append(contentLines, "", footer)
-	}
 	content := strings.Join(contentLines, "\n")
 	if state.Dialog.Active {
 		return overlayDialog(content, s.dialog.View(width, height), width, height)

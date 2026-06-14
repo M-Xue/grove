@@ -42,20 +42,21 @@ func (a *App) DialogChoose(buttonID string) Effect {
 func (a *App) HandleResult(result Result) Effect {
 	switch msg := result.(type) {
 	case WorktreesLoadedResult:
-		a.clearLoading()
 		if msg.Err != nil {
+			a.clearLoading()
 			a.appendStatus(StatusError, msg.Err.Error())
 			return nil
 		}
 		a.state.Worktrees = msg.Worktrees
 		a.state.SubmittedPath = ""
+		a.markLoadingDone()
 		return nil
 	case BranchCheckedResult:
-		a.clearLoading()
 		if msg.Err != nil {
 			a.appendStatus(StatusError, msg.Err.Error())
 			return nil
 		}
+		a.markLoadingDone()
 		if msg.Exists {
 			a.setLoading("adding worktree")
 			return AddWorktreeEffect{Path: msg.Path, Branch: msg.Branch, CreateBranch: false}
@@ -72,33 +73,36 @@ func (a *App) HandleResult(result Result) Effect {
 		}
 		return nil
 	case WorktreeAddedResult:
-		a.clearLoading()
 		if msg.Err != nil {
+			a.clearLoading()
 			a.appendStatus(StatusError, msg.Err.Error())
 			return nil
 		}
+		a.markLoadingDone()
 		a.state.Screen = ScreenChange
 		a.appendStatus(StatusSuccess, "worktree added")
 		a.setLoading("loading worktrees")
 		return LoadWorktreesEffect{}
 	case WorktreeRemovedResult:
-		a.clearLoading()
 		if msg.Err != nil {
+			a.clearLoading()
 			a.appendStatus(StatusError, msg.Err.Error())
 			return nil
 		}
+		a.markLoadingDone()
 		a.state.Screen = ScreenChange
 		a.appendStatus(StatusSuccess, "worktree removed")
 		a.setLoading("loading worktrees")
 		return LoadWorktreesEffect{}
 	case DocsLoadedResult:
-		a.clearLoading()
 		if msg.Err != nil {
+			a.clearLoading()
 			a.state.Screen = ScreenChange
 			a.appendStatus(StatusError, msg.Err.Error())
 			return nil
 		}
 		a.state.DocsLines = msg.Lines
+		a.markLoadingDone()
 		return nil
 	default:
 		return nil
