@@ -58,7 +58,7 @@ func (s *AddScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.State) 
 		if consumed, cmd := s.dialog.Update(msg); consumed {
 			return cmd
 		}
-		if handler, ok := s.confirmHandlers.HandlerFor(keys.Normalize(msg)); ok {
+		if handler, ok := s.confirmHandlers.HandlerFor(keys.Normalize(msg)); ok && handler != nil {
 			return handler(ctx, msg)
 		}
 		return nil
@@ -72,7 +72,7 @@ func (s *AddScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.State) 
 	if consumed, cmd := active.Update(msg); consumed {
 		return cmd
 	}
-	if handler, ok := s.defaultHandlers.HandlerFor(keys.Normalize(msg)); ok {
+	if handler, ok := s.defaultHandlers.HandlerFor(keys.Normalize(msg)); ok && handler != nil {
 		return handler(ctx, msg)
 	}
 	other.Blur()
@@ -93,7 +93,7 @@ func (s *AddScreen) Footer(helpWidth int, dialogActive bool) string {
 	model := NewHelpModel()
 	model.Width = screenMax(helpWidth, 0)
 	if dialogActive {
-		order := []keys.Key{keys.KeyEnter, keys.KeyEsc, keys.KeyCtrlC}
+		order := []keys.Key{keys.KeyEnter, keys.KeyTab, keys.KeyEsc, keys.KeyCtrlC}
 		return model.ShortHelpView(s.confirmHandlers.HelpBindings(order))
 	}
 	order := []keys.Key{keys.KeyEnter, keys.KeyTab, keys.KeyEsc, keys.KeyCtrlC}
@@ -108,14 +108,16 @@ func (s *AddScreen) initHandlers() {
 		keys.KeyCtrlC:    {Key: keys.KeyCtrlC, Handler: s.handleQuit, Help: key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit"))},
 		keys.KeyTab:      {Key: keys.KeyTab, Handler: s.handleSwitchFocus, Help: key.NewBinding(key.WithKeys("tab", "shift+tab", "up", "down"), key.WithHelp("tab", "switch field"))},
 		keys.KeyShiftTab: {Key: keys.KeyShiftTab, Handler: s.handleSwitchFocus, Help: key.NewBinding(key.WithKeys("tab", "shift+tab", "up", "down"), key.WithHelp("tab", "switch field"))},
-		keys.KeyUp:       {Key: keys.KeyUp, Handler: s.handleSwitchFocus, Help: key.NewBinding(key.WithKeys("tab", "shift+tab", "up", "down"), key.WithHelp("tab", "switch field"))},
-		keys.KeyDown:     {Key: keys.KeyDown, Handler: s.handleSwitchFocus, Help: key.NewBinding(key.WithKeys("tab", "shift+tab", "up", "down"), key.WithHelp("tab", "switch field"))},
+		keys.KeyUp:       {Key: keys.KeyUp, Handler: s.handleSwitchFocus, Help: key.NewBinding(key.WithKeys("tab", "shift+tab", "up", "down"), key.WithHelp("↑", "switch field"))},
+		keys.KeyDown:     {Key: keys.KeyDown, Handler: s.handleSwitchFocus, Help: key.NewBinding(key.WithKeys("tab", "shift+tab", "up", "down"), key.WithHelp("↓", "switch field"))},
 	}
 	s.confirmHandlers = BindingSet{
-		keys.KeyEnter: {Key: keys.KeyEnter, Handler: s.handleConfirmDialog, Help: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "confirm"))},
-		keys.KeyEsc:   {Key: keys.KeyEsc, Handler: s.handleCancelDialog, Help: key.NewBinding(key.WithKeys("esc", "ctrl+a"), key.WithHelp("esc", "cancel"))},
-		keys.KeyCtrlA: {Key: keys.KeyCtrlA, Handler: s.handleCancelDialog, Help: key.NewBinding(key.WithKeys("esc", "ctrl+a"), key.WithHelp("esc", "cancel"))},
-		keys.KeyCtrlC: {Key: keys.KeyCtrlC, Handler: s.handleQuit, Help: key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit"))},
+		keys.KeyEnter:    {Key: keys.KeyEnter, Handler: s.handleConfirmDialog, Help: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "confirm"))},
+		keys.KeyTab:      {Key: keys.KeyTab, Handler: nil, Help: key.NewBinding(key.WithKeys("tab", "shift+tab"), key.WithHelp("tab", "move"))},
+		keys.KeyShiftTab: {Key: keys.KeyShiftTab, Handler: nil, Help: key.NewBinding(key.WithKeys("tab", "shift+tab"), key.WithHelp("tab", "move"))},
+		keys.KeyEsc:      {Key: keys.KeyEsc, Handler: s.handleCancelDialog, Help: key.NewBinding(key.WithKeys("esc", "ctrl+a"), key.WithHelp("esc", "cancel"))},
+		keys.KeyCtrlA:    {Key: keys.KeyCtrlA, Handler: s.handleCancelDialog, Help: key.NewBinding(key.WithKeys("esc", "ctrl+a"), key.WithHelp("esc", "cancel"))},
+		keys.KeyCtrlC:    {Key: keys.KeyCtrlC, Handler: s.handleQuit, Help: key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit"))},
 	}
 }
 
