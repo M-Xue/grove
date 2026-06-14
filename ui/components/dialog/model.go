@@ -10,7 +10,7 @@ import (
 const (
 	dialogTitleColor    = "\x1b[38;5;230m"
 	dialogTextColor     = "\x1b[38;5;252m"
-	dialogBorderColor   = "63"
+	dialogBorderColor   = "245"
 	buttonSelectedColor = "\x1b[38;5;183m"
 	buttonMutedColor    = "\x1b[38;5;245m"
 	buttonResetColor    = "\x1b[0m"
