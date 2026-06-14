@@ -39,8 +39,8 @@ func (s *DocsScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.State)
 }
 
 func (s *DocsScreen) View(width, height int, footer string, state app.State) string {
-	visible := max(1, height-6)
-	maxScroll := max(0, len(state.DocsLines)-visible)
+	visible := screenMax(1, height-6)
+	maxScroll := screenMax(0, len(state.DocsLines)-visible)
 	if s.scroll > maxScroll {
 		s.scroll = maxScroll
 	}
@@ -55,7 +55,7 @@ func (s *DocsScreen) View(width, height int, footer string, state app.State) str
 
 func (s *DocsScreen) Footer(helpWidth int) string {
 	model := NewHelpModel()
-	model.Width = max(helpWidth, 0)
+	model.Width = screenMax(helpWidth, 0)
 	order := []keys.Key{keys.KeyEsc, keys.KeyUp, keys.KeyDown, keys.KeyCtrlC}
 	return model.ShortHelpView(s.handlers.HelpBindings(order))
 }
@@ -80,11 +80,4 @@ func (s *DocsScreen) handleUp(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
 func (s *DocsScreen) handleDown(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
 	s.scroll++
 	return nil
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

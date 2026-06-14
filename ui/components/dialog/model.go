@@ -64,16 +64,16 @@ func (m *Model) Update(msg tea.KeyMsg) (bool, tea.Cmd) {
 func (m Model) View(width, height int) string {
 	buttonLabels := make([]string, 0, len(m.buttons))
 	for _, button := range m.buttons {
-		label := buttonMutedColor + "[" + button.Label + "]" + buttonResetColor
+		label := buttonMutedColor + "[ ] " + button.Label + buttonResetColor
 		if button.ID == m.focusedID {
-			label = buttonSelectedColor + "[" + button.Label + "]" + buttonResetColor
+			label = buttonSelectedColor + "[x] " + button.Label + buttonResetColor
 		}
 		buttonLabels = append(buttonLabels, label)
 	}
 	body := []string{dialogTitleColor + m.title + buttonResetColor, "", dialogTextColor + m.description + buttonResetColor, "", strings.Join(buttonLabels, "  ")}
 	content := strings.Join(body, "\n")
-	style := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color(dialogBorderColor)).Padding(1, 2).MaxWidth(max(28, width-10)).Width(min(max(28, width/2), max(28, width-10)))
-	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, style.Render(content))
+	style := lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color(dialogBorderColor)).Padding(1, 2).MaxWidth(max(28, width-10))
+	return style.Render(content)
 }
 
 func (m *Model) syncFocus() {

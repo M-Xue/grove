@@ -19,7 +19,7 @@ type ChangeScreen struct {
 	defaultHandlers BindingSet
 	confirmHandlers BindingSet
 	worktrees       []appWorktree
-	query           string
+	dialogSignature string
 }
 
 type appWorktree struct {
@@ -49,14 +49,20 @@ func (s *ChangeScreen) Sync(state app.State) {
 	items = filterItems(items, s.search.Value())
 	s.list.SetItems(items)
 	if state.Dialog.Active {
-		s.dialog.SetTitle(state.Dialog.Title)
-		s.dialog.SetDescription(state.Dialog.Description)
-		buttons := make([]dialog.Button, 0, len(state.Dialog.Buttons))
-		for _, button := range state.Dialog.Buttons {
-			buttons = append(buttons, dialog.Button{ID: button.ID, Label: button.Label})
+		signature := dialogSignature(state.Dialog)
+		if signature != s.dialogSignature {
+			s.dialog.SetTitle(state.Dialog.Title)
+			s.dialog.SetDescription(state.Dialog.Description)
+			buttons := make([]dialog.Button, 0, len(state.Dialog.Buttons))
+			for _, button := range state.Dialog.Buttons {
+				buttons = append(buttons, dialog.Button{ID: button.ID, Label: button.Label})
+			}
+			s.dialog.SetButtons(buttons)
+			s.dialog.SetFocusedID(state.Dialog.FocusedID)
+			s.dialogSignature = signature
 		}
-		s.dialog.SetButtons(buttons)
-		s.dialog.SetFocusedID(state.Dialog.FocusedID)
+	} else {
+		s.dialogSignature = ""
 	}
 }
 
@@ -87,7 +93,7 @@ func (s *ChangeScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.Stat
 
 func (s *ChangeScreen) View(width, height int, bodyHeight int, footer string, state app.State) string {
 	header := []string{"grove", "", "Change worktree", "", s.search.View(), ""}
-	body := s.list.View(max(1, bodyHeight-len(header)))
+	body := s.list.View(screenMax(1, bodyHeight-len(header)))
 	contentLines := append(header, strings.Split(body, "\n")...)
 	if footer != "" {
 		contentLines = append(contentLines, "", footer)
@@ -101,14 +107,14 @@ func (s *ChangeScreen) View(width, height int, bodyHeight int, footer string, st
 
 func (s *ChangeScreen) Footer(helpWidth int) string {
 	model := NewHelpModel()
-	model.Width = max(helpWidth, 0)
+	model.Width = screenMax(helpWidth, 0)
 	order := []keys.Key{keys.KeyEnter, keys.KeyQuestion, keys.KeyCtrlA, keys.KeyCtrlD, keys.KeyUp, keys.KeyDown, keys.KeyEsc}
 	return model.ShortHelpView(s.defaultHandlers.HelpBindings(order))
 }
 
 func (s *ChangeScreen) DialogFooter(helpWidth int) string {
 	model := NewHelpModel()
-	model.Width = max(helpWidth, 0)
+	model.Width = screenMax(helpWidth, 0)
 	order := []keys.Key{keys.KeyEnter, keys.KeyEsc, keys.KeyCtrlC}
 	return model.ShortHelpView(s.confirmHandlers.HelpBindings(order))
 }
@@ -194,9 +200,10 @@ func toItems(worktrees []appWorktree) []selectlist.Item {
 	return items
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
+func dialogSignature(state app.DialogState) string {
+	parts := []string{string(state.Kind), state.Title, state.Description, state.FocusedID}
+	for _, button := range state.Buttons {
+		parts = append(parts, button.ID, button.Label)
 	}
-	return b
+	return strings.Join(parts, "\x00")
 }
