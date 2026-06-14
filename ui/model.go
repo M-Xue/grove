@@ -27,6 +27,8 @@ type ChangeState struct {
 	items         []string
 	filtered      []string
 	worktrees     []worktree.WorktreeInfo
+	confirmRemove bool
+	confirmPath   string
 	submittedPath string
 }
 

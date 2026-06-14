@@ -73,3 +73,10 @@ func (m *Model) syncChangeItemsFromWorktrees() {
 	}
 	m.refreshChangeFiltered()
 }
+
+func (m *Model) cancelRemoveWorktree() {
+	m.change.confirmRemove = false
+	m.change.confirmPath = ""
+	m.clearStatus()
+	m.clearError()
+}

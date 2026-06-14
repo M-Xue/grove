@@ -59,6 +59,71 @@ func TestHandleWorktreesLoadedClearsSubmittedPath(t *testing.T) {
 	}
 }
 
+func TestUpdateChangeCtrlDStartsRemoveConfirmation(t *testing.T) {
+	m := New(nil)
+	m.change.worktrees = []worktree.WorktreeInfo{{Path: "/repo-feature", Branch: "feature/auth"}}
+	m.change.filtered = []string{"/repo-feature"}
+	m.change.selectedItem = "/repo-feature"
+
+	updated, cmd := m.updateChange(tea.KeyMsg{Type: tea.KeyCtrlD})
+	got := updated.(Model)
+
+	if !got.change.confirmRemove {
+		t.Fatal("expected remove confirmation to start")
+	}
+	if got.change.confirmPath != "/repo-feature" {
+		t.Fatalf("unexpected confirm path: got %q", got.change.confirmPath)
+	}
+	if cmd != nil {
+		t.Fatal("expected no command")
+	}
+}
+
+func TestUpdateChangeConfirmRemoveNoCancelsConfirmation(t *testing.T) {
+	m := New(nil)
+	m.change.confirmRemove = true
+	m.change.confirmPath = "/repo-feature"
+	m.setStatus("pending")
+
+	updated, cmd := m.updateChange(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	got := updated.(Model)
+
+	if got.change.confirmRemove {
+		t.Fatal("expected remove confirmation to be cleared")
+	}
+	if got.change.confirmPath != "" {
+		t.Fatalf("expected confirm path to be cleared, got %q", got.change.confirmPath)
+	}
+	if got.status.message != "" {
+		t.Fatalf("expected status to be cleared, got %q", got.status.message)
+	}
+	if cmd != nil {
+		t.Fatal("expected no command")
+	}
+}
+
+func TestUpdateChangeConfirmRemoveYesReturnsCommand(t *testing.T) {
+	m := New(nil)
+	m.change.confirmRemove = true
+	m.change.confirmPath = "/repo-feature"
+
+	updated, cmd := m.updateChange(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	got := updated.(Model)
+
+	if got.change.confirmRemove {
+		t.Fatal("expected remove confirmation to be cleared")
+	}
+	if got.status.message != "removing worktree" {
+		t.Fatalf("unexpected status message: got %q", got.status.message)
+	}
+	if cmd == nil {
+		t.Fatal("expected remove command")
+	}
+	if got.change.confirmPath != "" {
+		t.Fatalf("expected confirm path to be cleared, got %q", got.change.confirmPath)
+	}
+}
+
 func TestUpdateChangeQuestionMarkOpensDocs(t *testing.T) {
 	m := New(nil)
 

@@ -5,6 +5,15 @@ import (
 )
 
 func changeHeaderLines(m Model) []string {
+	if m.change.confirmRemove {
+		return []string{
+			"Delete worktree?",
+			m.displayItem(m.change.confirmPath),
+			"This cannot be undone. [y/n]",
+			"",
+		}
+	}
+
 	inputLine := "> "
 	if m.change.query == "" {
 		inputLine += placeholderColor + "Search worktree paths" + resetColor
@@ -15,6 +24,10 @@ func changeHeaderLines(m Model) []string {
 }
 
 func changeBodyLines(m Model, availableHeight int) []string {
+	if m.change.confirmRemove {
+		return nil
+	}
+
 	visibleRows := max(1, availableHeight)
 	m.syncChangeScroll(visibleRows)
 
@@ -41,5 +54,8 @@ func changeBodyLines(m Model, availableHeight int) []string {
 func changeFooterLines(m Model, contentWidth int) []string {
 	helper := m.help
 	helper.Width = max(contentWidth, 0)
+	if m.change.confirmRemove {
+		return []string{helper.ShortHelpView([]key.Binding{m.keys.confirmYes, m.keys.confirmNo, m.keys.changeQuit})}
+	}
 	return []string{helper.ShortHelpView([]key.Binding{m.keys.submit, m.keys.docs, m.keys.addMode, m.keys.remove, m.keys.moveUp, m.keys.moveDown, m.keys.changeQuit})}
 }
