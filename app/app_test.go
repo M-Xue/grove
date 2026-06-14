@@ -18,6 +18,34 @@ func TestRequestSubmitSelectedPathSetsOutput(t *testing.T) {
 	}
 }
 
+func TestInitUsesInitialScreenEffect(t *testing.T) {
+	tests := []struct {
+		name   string
+		screen ScreenID
+		want   any
+	}{
+		{name: "change", screen: ScreenChange, want: LoadWorktreesEffect{}},
+		{name: "add", screen: ScreenAdd, want: nil},
+		{name: "docs", screen: ScreenDocs, want: LoadDocsEffect{}},
+		{name: "branch", screen: ScreenBranch, want: LoadBranchesEffect{}},
+	}
+
+	for _, test := range tests {
+		a := New(Services{}, WithInitialScreen(test.screen))
+		got := a.Init()
+		switch want := test.want.(type) {
+		case nil:
+			if got != nil {
+				t.Fatalf("%s: expected nil effect, got %#v", test.name, got)
+			}
+		default:
+			if got != want {
+				t.Fatalf("%s: expected %#v, got %#v", test.name, want, got)
+			}
+		}
+	}
+}
+
 func TestRequestAddWorktreeRequiresPathAndBranch(t *testing.T) {
 	a := New(Services{})
 	if effect := a.RequestAddWorktree("", "branch"); effect != nil {
