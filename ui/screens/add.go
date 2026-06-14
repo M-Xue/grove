@@ -18,6 +18,7 @@ type AddScreen struct {
 	focusedPath     bool
 	defaultHandlers BindingSet
 	confirmHandlers BindingSet
+	dialogSignature string
 }
 
 func NewAddScreen() *AddScreen {
@@ -34,14 +35,20 @@ func NewAddScreen() *AddScreen {
 
 func (s *AddScreen) Sync(state app.State) {
 	if state.Dialog.Active {
-		s.dialog.SetTitle(state.Dialog.Title)
-		s.dialog.SetDescription(state.Dialog.Description)
-		buttons := make([]dialog.Button, 0, len(state.Dialog.Buttons))
-		for _, button := range state.Dialog.Buttons {
-			buttons = append(buttons, dialog.Button{ID: button.ID, Label: button.Label})
+		signature := addDialogSignature(state.Dialog)
+		if signature != s.dialogSignature {
+			s.dialog.SetTitle(state.Dialog.Title)
+			s.dialog.SetDescription(state.Dialog.Description)
+			buttons := make([]dialog.Button, 0, len(state.Dialog.Buttons))
+			for _, button := range state.Dialog.Buttons {
+				buttons = append(buttons, dialog.Button{ID: button.ID, Label: button.Label})
+			}
+			s.dialog.SetButtons(buttons)
+			s.dialog.SetFocusedID(state.Dialog.FocusedID)
+			s.dialogSignature = signature
 		}
-		s.dialog.SetButtons(buttons)
-		s.dialog.SetFocusedID(state.Dialog.FocusedID)
+	} else {
+		s.dialogSignature = ""
 	}
 }
 
@@ -86,7 +93,7 @@ func (s *AddScreen) View(width, height int, footer string, state app.State) stri
 
 func (s *AddScreen) Footer(helpWidth int, dialogActive bool) string {
 	model := NewHelpModel()
-	model.Width = max(helpWidth, 0)
+	model.Width = screenMax(helpWidth, 0)
 	if dialogActive {
 		order := []keys.Key{keys.KeyEnter, keys.KeyEsc, keys.KeyCtrlC}
 		return model.ShortHelpView(s.confirmHandlers.HelpBindings(order))
@@ -152,4 +159,12 @@ func (s *AddScreen) handleConfirmDialog(ctx *ScreenContext, msg tea.KeyMsg) tea.
 func (s *AddScreen) handleCancelDialog(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
 	ctx.App.DismissDialog()
 	return nil
+}
+
+func addDialogSignature(state app.DialogState) string {
+	parts := []string{string(state.Kind), state.Title, state.Description, state.FocusedID}
+	for _, button := range state.Buttons {
+		parts = append(parts, button.ID, button.Label)
+	}
+	return strings.Join(parts, "\x00")
 }
