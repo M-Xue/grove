@@ -19,6 +19,8 @@ const (
 	KeyTab       Key = "tab"
 	KeyShiftTab  Key = "shift+tab"
 	KeyBackspace Key = "backspace"
+	KeyJ         Key = "j"
+	KeyK         Key = "k"
 	KeyQ         Key = "q"
 )
 
@@ -50,6 +52,10 @@ func Normalize(msg tea.KeyMsg) Key {
 		return KeyShiftTab
 	case "backspace":
 		return KeyBackspace
+	case "j":
+		return KeyJ
+	case "k":
+		return KeyK
 	case "q":
 		return KeyQ
 	default:
