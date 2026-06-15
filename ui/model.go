@@ -27,7 +27,6 @@ type Model struct {
 	status  status.Model
 	change  *screens.ChangeScreen
 	add     *screens.AddScreen
-	docs    *screens.DocsScreen
 	branch  *screens.BranchScreen
 }
 
@@ -39,7 +38,6 @@ func New(application *app.App) *Model {
 		status:  status.New(),
 		change:  screens.NewChangeScreen(),
 		add:     screens.NewAddScreen(),
-		docs:    screens.NewDocsScreen(),
 		branch:  screens.NewBranchScreen(),
 	}
 }
@@ -71,8 +69,6 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.app.State().Screen {
 		case app.ScreenAdd:
 			cmd = m.add.Update(ctx, msg, m.app.State())
-		case app.ScreenDocs:
-			cmd = m.docs.Update(ctx, msg, m.app.State())
 		case app.ScreenBranch:
 			cmd = m.branch.Update(ctx, msg, m.app.State())
 		default:
@@ -96,15 +92,13 @@ func (m *Model) View() string {
 	noticeLines := expandRenderedLines(append(append([]string(nil), loadingLines...), statusLines...))
 	contentHeight := max(0, m.height-verticalPadding*2)
 	bodyHeight := max(0, contentHeight-2)
-	var body string
-	switch state.Screen {
-	case app.ScreenAdd:
-		body = m.add.View(contentWidth, bodyHeight, state)
-	case app.ScreenDocs:
-		body = m.docs.View(contentWidth, bodyHeight, state)
-	case app.ScreenBranch:
-		body = m.branch.View(contentWidth, bodyHeight, state)
-	default:
+		var body string
+		switch state.Screen {
+		case app.ScreenAdd:
+			body = m.add.View(contentWidth, bodyHeight, state)
+		case app.ScreenBranch:
+			body = m.branch.View(contentWidth, bodyHeight, state)
+		default:
 		body = m.change.View(contentWidth, bodyHeight, state)
 	}
 	bodyLines := fitBody(body, contentWidth, bodyHeight)
@@ -147,7 +141,6 @@ func (m *Model) syncScreens() {
 	state := m.app.State()
 	m.change.Sync(state)
 	m.add.Sync(state)
-	m.docs.Sync(state)
 	m.branch.Sync(state)
 	m.screen = state.Screen
 }
@@ -176,11 +169,6 @@ func (m *Model) runEffect(effect app.Effect) tea.Cmd {
 		return func() tea.Msg {
 			worktrees, err := services.Worktree.List()
 			return effectMsg{result: app.WorktreesLoadedResult{Worktrees: worktrees, Err: err}}
-		}
-	case app.LoadDocsEffect:
-		return func() tea.Msg {
-			lines, err := services.Docs.WorktreeHelp()
-			return effectMsg{result: app.DocsLoadedResult{Lines: lines, Err: err}}
 		}
 	case app.LoadBranchesEffect:
 		return func() tea.Msg {
@@ -310,8 +298,6 @@ func (m *Model) footer(contentWidth int, state app.State) string {
 	switch state.Screen {
 	case app.ScreenAdd:
 		return m.add.Footer(contentWidth, state.Dialog.Active)
-	case app.ScreenDocs:
-		return m.docs.Footer(contentWidth)
 	case app.ScreenBranch:
 		return m.branch.Footer(contentWidth, state.BranchScope)
 	default:

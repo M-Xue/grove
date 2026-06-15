@@ -6,18 +6,6 @@ import (
 	"strings"
 )
 
-func (a *App) OpenDocs() Effect {
-	a.state.Screen = ScreenDocs
-	a.setLoading("loading docs")
-	return LoadDocsEffect{}
-}
-
-func (a *App) CloseDocs() {
-	a.state.Screen = ScreenChange
-	a.clearDialog()
-	a.clearLoading()
-}
-
 func (a *App) DialogChoose(buttonID string) Effect {
 	if !a.state.Dialog.Active {
 		return nil
@@ -189,16 +177,6 @@ func (a *App) HandleResult(result Result) Effect {
 		a.appendStatus(StatusSuccess, "worktree removed")
 		a.setLoading("loading worktrees")
 		return LoadWorktreesEffect{}
-	case DocsLoadedResult:
-		if msg.Err != nil {
-			a.clearLoading()
-			a.state.Screen = ScreenChange
-			a.appendStatus(StatusError, msg.Err.Error())
-			return nil
-		}
-		a.state.DocsLines = msg.Lines
-		a.markLoadingDone()
-		return nil
 	default:
 		return nil
 	}

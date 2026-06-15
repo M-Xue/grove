@@ -5,7 +5,6 @@ import (
 
 	"github.com/M-Xue/grove/app"
 	branchsvc "github.com/M-Xue/grove/branch"
-	"github.com/M-Xue/grove/docs"
 	"github.com/M-Xue/grove/ui"
 	"github.com/M-Xue/grove/worktree"
 )
@@ -14,7 +13,6 @@ func TestSelectedPathOutputReturnsSubmittedPath(t *testing.T) {
 	m := ui.New(app.New(app.Services{
 		Worktree: worktree.NewServiceWithRunner(nil),
 		Branch:   branchsvc.NewServiceWithRunner(nil),
-		Docs:     docs.NewService(),
 	}))
 
 	if got := selectedPathOutput(m); got != "" {
@@ -39,7 +37,6 @@ func TestParseInitialScreenSupportsFlags(t *testing.T) {
 	}{
 		{args: []string{"-a"}, want: app.ScreenAdd},
 		{args: []string{"-b"}, want: app.ScreenBranch},
-		{args: []string{"-d"}, want: app.ScreenDocs},
 	}
 
 	for _, test := range tests {

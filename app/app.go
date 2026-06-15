@@ -34,9 +34,6 @@ func (a *App) Init() Effect {
 	switch a.state.Screen {
 	case ScreenAdd:
 		return nil
-	case ScreenDocs:
-		a.setLoading("loading docs")
-		return LoadDocsEffect{}
 	case ScreenBranch:
 		a.setLoading("loading worktrees")
 		return LoadWorktreesEffect{}
