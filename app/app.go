@@ -38,8 +38,8 @@ func (a *App) Init() Effect {
 		a.setLoading("loading docs")
 		return LoadDocsEffect{}
 	case ScreenBranch:
-		a.setLoading("loading branches")
-		return LoadBranchesEffect{}
+		a.setLoading("loading worktrees")
+		return LoadWorktreesEffect{}
 	default:
 		a.setLoading("loading worktrees")
 		return LoadWorktreesEffect{}

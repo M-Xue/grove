@@ -27,7 +27,7 @@ func TestInitUsesInitialScreenEffect(t *testing.T) {
 		{name: "change", screen: ScreenChange, want: LoadWorktreesEffect{}},
 		{name: "add", screen: ScreenAdd, want: nil},
 		{name: "docs", screen: ScreenDocs, want: LoadDocsEffect{}},
-		{name: "branch", screen: ScreenBranch, want: LoadBranchesEffect{}},
+		{name: "branch", screen: ScreenBranch, want: LoadWorktreesEffect{}},
 	}
 
 	for _, test := range tests {
@@ -67,6 +67,31 @@ func TestHandleBranchesLoadedRequestsCommitPreviewForSelection(t *testing.T) {
 	}
 	if loadEffect.Name != "feature/a" {
 		t.Fatalf("unexpected branch name: %q", loadEffect.Name)
+	}
+}
+
+func TestBranchInitLoadsBranchesAfterWorktrees(t *testing.T) {
+	a := New(Services{}, WithInitialScreen(ScreenBranch))
+
+	effect := a.Init()
+	if effect != (LoadWorktreesEffect{}) {
+		t.Fatalf("expected LoadWorktreesEffect, got %#v", effect)
+	}
+
+	effect = a.HandleResult(WorktreesLoadedResult{})
+	if effect != (LoadBranchesEffect{}) {
+		t.Fatalf("expected LoadBranchesEffect after worktrees, got %#v", effect)
+	}
+
+	state := a.State()
+	if len(state.Loading) != 2 {
+		t.Fatalf("expected two loading entries, got %#v", state.Loading)
+	}
+	if state.Loading[0].Message != "loading worktrees" || !state.Loading[0].Completed {
+		t.Fatalf("unexpected first loading entry: %#v", state.Loading[0])
+	}
+	if state.Loading[1].Message != "loading branches" || state.Loading[1].Completed {
+		t.Fatalf("unexpected second loading entry: %#v", state.Loading[1])
 	}
 }
 

@@ -322,3 +322,31 @@ func TestManagerListSupportsDetachedHead(t *testing.T) {
 		t.Fatalf("expected detached branch label, got %q", got[0].Branch)
 	}
 }
+
+func TestManagerListIgnoresUntrackedFilesForDirtyState(t *testing.T) {
+	runner := &stubRunner{
+		results: map[string]commandResult{
+			commandKey("git", "worktree", "list", "--porcelain"): {
+				output: []byte("worktree /repo\nHEAD abc123\nbranch refs/heads/main\n"),
+			},
+			commandKey("git", "-C", "/repo", "log", "-1", "--pretty=%s"): {
+				output: []byte("Initial commit\n"),
+			},
+			commandKey("git", "-C", "/repo", "status", "--porcelain"): {
+				output: []byte("?? notes.txt\n"),
+			},
+		},
+	}
+
+	manager := NewServiceWithRunner(runner)
+	got, err := manager.List()
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("expected 1 worktree, got %d", len(got))
+	}
+	if got[0].HasUncommittedChanges {
+		t.Fatalf("expected untracked files to be ignored, got %#v", got[0])
+	}
+}
