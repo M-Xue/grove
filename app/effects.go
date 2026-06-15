@@ -30,8 +30,6 @@ type DeleteAllBranchesEffect struct{}
 
 type FetchBranchesEffect struct{}
 
-type LoadDocsEffect struct{}
-
 type CheckBranchExistsEffect struct {
 	Path   string
 	Branch string
@@ -100,9 +98,4 @@ type WorktreeAddedResult struct {
 type WorktreeRemovedResult struct {
 	Path string
 	Err  error
-}
-
-type DocsLoadedResult struct {
-	Lines []string
-	Err   error
 }

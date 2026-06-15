@@ -7,7 +7,6 @@ import (
 
 	"github.com/M-Xue/grove/app"
 	branchsvc "github.com/M-Xue/grove/branch"
-	"github.com/M-Xue/grove/docs"
 	"github.com/M-Xue/grove/ui"
 	"github.com/M-Xue/grove/worktree"
 	tea "github.com/charmbracelet/bubbletea"
@@ -29,7 +28,6 @@ func main() {
 	application := app.New(app.Services{
 		Worktree: worktreeService,
 		Branch:   branchsvc.NewService(),
-		Docs:     docs.NewService(),
 	}, app.WithInitialScreen(initialScreen))
 
 	p := tea.NewProgram(ui.New(application), tea.WithAltScreen())
@@ -59,7 +57,6 @@ func parseInitialScreen(args []string) (app.ScreenID, error) {
 	fs.SetOutput(os.Stderr)
 	branch := fs.Bool("b", false, "open branch screen")
 	add := fs.Bool("a", false, "open add screen")
-	docsFlag := fs.Bool("d", false, "open docs screen")
 	if err := fs.Parse(args); err != nil {
 		return "", err
 	}
@@ -73,12 +70,8 @@ func parseInitialScreen(args []string) (app.ScreenID, error) {
 		selected = app.ScreenAdd
 		selectedCount++
 	}
-	if *docsFlag {
-		selected = app.ScreenDocs
-		selectedCount++
-	}
 	if selectedCount > 1 {
-		return "", fmt.Errorf("only one of -a, -b, or -d may be provided")
+		return "", fmt.Errorf("only one of -a or -b may be provided")
 	}
 	if fs.NArg() > 0 {
 		return "", fmt.Errorf("unexpected arguments: %s", fs.Args())

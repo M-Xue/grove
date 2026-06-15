@@ -26,7 +26,6 @@ func TestInitUsesInitialScreenEffect(t *testing.T) {
 	}{
 		{name: "change", screen: ScreenChange, want: LoadWorktreesEffect{}},
 		{name: "add", screen: ScreenAdd, want: nil},
-		{name: "docs", screen: ScreenDocs, want: LoadDocsEffect{}},
 		{name: "branch", screen: ScreenBranch, want: LoadWorktreesEffect{}},
 	}
 

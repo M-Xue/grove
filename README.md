@@ -10,9 +10,10 @@ It helps developers jump between parallel branches quickly from a keyboard-first
 - Filter worktrees by path
 - Jump directly into a selected worktree
 - Switch directly to a local or remote-tracking branch
+- Preview recent commits for the selected branch
+- Fetch, delete, and bulk-delete local branches
 - Create worktrees from existing or new branches
 - Remove worktrees without leaving the TUI
-- View `git worktree` docs inside the app
 
 ## Install
 
