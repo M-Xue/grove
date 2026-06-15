@@ -2,7 +2,7 @@
 
 `grove` is a terminal UI for browsing, filtering, creating, and removing Git worktrees.
 
-It helps developers jump between parallel branches quickly from a keyboard-first interface, while preserving a clean shell-wrapper contract for directory switching.
+It helps developers jump between parallel branches quickly from a keyboard-first interface, while preserving a clean shell-integration contract for directory switching.
 
 ## Features
 
@@ -17,19 +17,44 @@ It helps developers jump between parallel branches quickly from a keyboard-first
 
 ## Install
 
-The simplest install path is:
+The simplest install path is the repo-managed installer.
 
-1. Build `grove` locally with `go build`.
-2. Move the binary to a stable location.
-3. Add a small shell function to your shell config.
+1. Run the installer for your shell.
+2. Reload your shell config.
 
-The binary alone cannot change your current shell directory.
+`grove` can print the selected worktree path, but changing your current shell directory requires shell integration. The installers handle both the binary install and shell config wiring.
 
-### Build The Binary
+### Quick Install
 
 Requirements:
 
 - Go 1.24.2+
+
+zsh on Linux/macOS:
+
+```bash
+sh scripts/install.sh zsh
+```
+
+bash on Linux/macOS:
+
+```bash
+sh scripts/install.sh bash
+```
+
+If you omit the argument, the script falls back to your `$SHELL` value. The script itself still runs under `sh`.
+
+This builds `grove`, installs it to `~/.local/bin/grove`, and updates either `~/.zshrc` or `~/.bashrc`.
+
+PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
+```
+
+This builds `grove.exe`, installs it to `$HOME\AppData\Local\Programs\grove\grove.exe`, and updates `$PROFILE`.
+
+### Build The Binary
 
 Build for your current machine:
 
@@ -43,35 +68,41 @@ Go automatically builds for your current OS and CPU architecture. You can inspec
 go env GOOS GOARCH
 ```
 
-### zsh and bash
+### Manual Install
 
-1. Build `grove` locally with `go build -o grove .`.
-2. Move it to `~/.local/bin/grove`.
-3. Make it executable:
+If you want to wire it up yourself, build the binary and move it to a stable location first.
 
 ```bash
-chmod +x ~/.local/bin/grove
+go build -o grove .
 ```
 
-4. Add this function to your shell config:
+Examples below assume the binary lives at `~/.local/bin/grove` on Unix-like systems and `$HOME\AppData\Local\Programs\grove\grove.exe` on Windows.
+
+### shell-init
+
+`grove shell-init <shell>` prints the wrapper code for a supported shell:
+
+- `bash`
+- `zsh`
+- `powershell`
+
+The generated wrapper runs the real `grove` binary, captures its `stdout`, and changes your shell directory when a path is returned.
+
+### zsh and bash
+
+Add this line to `~/.zshrc`:
 
 ```sh
-grove() {
-	local output
-	output="$($HOME/.local/bin/grove "$@")"
-	local status=$?
-	if [ $status -ne 0 ]; then
-		return $status
-	fi
-	if [ -n "$output" ]; then
-		cd "$output" || return 1
-	fi
-}
+eval "$(~/.local/bin/grove shell-init zsh)"
 ```
 
-Use `~/.zshrc` for `zsh` or `~/.bashrc` for `bash`.
+For bash, use:
 
-5. Reload your shell:
+```sh
+eval "$(~/.local/bin/grove shell-init bash)"
+```
+
+Reload your shell:
 
 ```bash
 source ~/.zshrc
@@ -85,31 +116,13 @@ or:
 
 ### PowerShell
 
-1. Build `grove.exe` locally with `go build -o grove.exe .`.
-2. Move it to `$HOME\AppData\Local\Programs\grove\grove.exe`.
-3. Add this to your PowerShell profile at `$PROFILE`:
+Add this to your PowerShell profile at `$PROFILE`:
 
 ```powershell
-function Invoke-Grove {
-    param(
-        [Parameter(ValueFromRemainingArguments = $true)]
-        [string[]]$Arguments
-    )
-
-    $output = & "$HOME\AppData\Local\Programs\grove\grove.exe" @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        return $LASTEXITCODE
-    }
-
-    if (-not [string]::IsNullOrWhiteSpace($output)) {
-        Set-Location $output
-    }
-}
-
-Set-Alias grove Invoke-Grove
+Invoke-Expression (& "$HOME\AppData\Local\Programs\grove\grove.exe" shell-init powershell)
 ```
 
-4. Reload PowerShell:
+Reload PowerShell:
 
 ```powershell
 . $PROFILE
@@ -117,7 +130,7 @@ Set-Alias grove Invoke-Grove
 
 ## Run From Source
 
-This runs the TUI only. Without the shell wrapper, selecting a worktree prints its path to `stdout` instead of changing your shell directory.
+This runs the TUI only. Without shell integration, selecting a worktree prints its path to `stdout` instead of changing your shell directory.
 
 ```bash
 go run .

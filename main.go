@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/M-Xue/grove/app"
 	branchsvc "github.com/M-Xue/grove/branch"
@@ -13,10 +15,19 @@ import (
 )
 
 func main() {
-	initialScreen, err := parseInitialScreen(os.Args[1:])
+	cmd, err := parseCommand(os.Args[1:])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error running grove: %v\n", err)
 		os.Exit(1)
+	}
+	if cmd.Kind == commandShellInit {
+		execPath, err := os.Executable()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error running grove: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Print(shellInitScript(cmd.Shell, execPath))
+		return
 	}
 
 	worktreeService := worktree.NewService()
@@ -28,7 +39,7 @@ func main() {
 	application := app.New(app.Services{
 		Worktree: worktreeService,
 		Branch:   branchsvc.NewService(),
-	}, app.WithInitialScreen(initialScreen))
+	}, app.WithInitialScreen(cmd.Screen))
 
 	p := tea.NewProgram(ui.New(application), tea.WithAltScreen())
 	model, err := p.Run()
@@ -50,6 +61,41 @@ func main() {
 
 func selectedPathOutput(model *ui.Model) string {
 	return model.SubmittedPath()
+}
+
+type commandKind int
+
+const (
+	commandRun commandKind = iota
+	commandShellInit
+)
+
+type command struct {
+	Kind   commandKind
+	Screen app.ScreenID
+	Shell  string
+}
+
+func parseCommand(args []string) (command, error) {
+	if len(args) >= 1 && args[0] == "shell-init" {
+		if len(args) < 2 {
+			return command{}, fmt.Errorf("shell-init requires a shell name")
+		}
+		shell := args[1]
+		if len(args) > 2 {
+			return command{}, fmt.Errorf("unexpected arguments: %s", strings.Join(args[2:], " "))
+		}
+		if !isSupportedShell(shell) {
+			return command{}, fmt.Errorf("unsupported shell %q", shell)
+		}
+		return command{Kind: commandShellInit, Shell: shell}, nil
+	}
+
+	screen, err := parseInitialScreen(args)
+	if err != nil {
+		return command{}, err
+	}
+	return command{Kind: commandRun, Screen: screen}, nil
 }
 
 func parseInitialScreen(args []string) (app.ScreenID, error) {
@@ -77,4 +123,55 @@ func parseInitialScreen(args []string) (app.ScreenID, error) {
 		return "", fmt.Errorf("unexpected arguments: %s", fs.Args())
 	}
 	return selected, nil
+}
+
+func isSupportedShell(shell string) bool {
+	switch shell {
+	case "bash", "zsh", "powershell":
+		return true
+	default:
+		return false
+	}
+}
+
+func shellInitScript(shell, binaryPath string) string {
+	quotedPath := shellQuote(binaryPath)
+	switch shell {
+	case "powershell":
+		return fmt.Sprintf(`function Invoke-Grove {
+    param(
+        [Parameter(ValueFromRemainingArguments = $true)]
+        [string[]]$Arguments
+    )
+
+    $output = & "%s" @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        return $LASTEXITCODE
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($output)) {
+        Set-Location $output
+    }
+}
+
+Set-Alias grove Invoke-Grove
+`, filepath.Clean(binaryPath))
+	default:
+		return fmt.Sprintf(`grove() {
+		local output
+		output="$(%s "$@")"
+		local status=$?
+		if [ $status -ne 0 ]; then
+			return $status
+		fi
+		if [ -n "$output" ]; then
+			cd "$output" || return 1
+		fi
+	}
+	`, quotedPath)
+	}
+}
+
+func shellQuote(path string) string {
+	return "'" + strings.ReplaceAll(path, "'", "'\\''") + "'"
 }

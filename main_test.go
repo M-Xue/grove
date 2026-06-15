@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/M-Xue/grove/app"
@@ -53,5 +54,65 @@ func TestParseInitialScreenSupportsFlags(t *testing.T) {
 func TestParseInitialScreenRejectsMultipleFlags(t *testing.T) {
 	if _, err := parseInitialScreen([]string{"-a", "-b"}); err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestParseCommandDefaultsToRun(t *testing.T) {
+	cmd, err := parseCommand(nil)
+	if err != nil {
+		t.Fatalf("parseCommand returned error: %v", err)
+	}
+	if cmd.Kind != commandRun {
+		t.Fatalf("unexpected command kind: %v", cmd.Kind)
+	}
+	if cmd.Screen != app.ScreenChange {
+		t.Fatalf("unexpected screen: %q", cmd.Screen)
+	}
+}
+
+func TestParseCommandSupportsShellInit(t *testing.T) {
+	cmd, err := parseCommand([]string{"shell-init", "zsh"})
+	if err != nil {
+		t.Fatalf("parseCommand returned error: %v", err)
+	}
+	if cmd.Kind != commandShellInit {
+		t.Fatalf("unexpected command kind: %v", cmd.Kind)
+	}
+	if cmd.Shell != "zsh" {
+		t.Fatalf("unexpected shell: %q", cmd.Shell)
+	}
+}
+
+func TestParseCommandRejectsUnsupportedShell(t *testing.T) {
+	if _, err := parseCommand([]string{"shell-init", "tcsh"}); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestShellInitScript(t *testing.T) {
+	bashScript := shellInitScript("bash", "/tmp/grove")
+	if bashScript == "" {
+		t.Fatal("expected bash shell script")
+	}
+	if want := "'/tmp/grove'"; !strings.Contains(bashScript, want) {
+		t.Fatalf("expected bash script to contain %q", want)
+	}
+
+	powershellScript := shellInitScript("powershell", `C:\grove\grove.exe`)
+	if want := `Set-Alias grove Invoke-Grove`; !strings.Contains(powershellScript, want) {
+		t.Fatalf("expected powershell script to contain %q", want)
+	}
+}
+
+func TestParseCommandSupportsPowershellShellInit(t *testing.T) {
+	cmd, err := parseCommand([]string{"shell-init", "powershell"})
+	if err != nil {
+		t.Fatalf("parseCommand returned error: %v", err)
+	}
+	if cmd.Kind != commandShellInit {
+		t.Fatalf("unexpected command kind: %v", cmd.Kind)
+	}
+	if cmd.Shell != "powershell" {
+		t.Fatalf("unexpected shell: %q", cmd.Shell)
 	}
 }
