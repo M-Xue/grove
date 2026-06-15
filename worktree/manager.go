@@ -154,7 +154,14 @@ func (s manager) hasUncommittedChanges(path string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return strings.TrimSpace(string(output)) != "", nil
+	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "?? ") {
+			continue
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 func validateAddInput(path, branch string) (string, string, error) {

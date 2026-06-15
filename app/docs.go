@@ -63,6 +63,10 @@ func (a *App) HandleResult(result Result) Effect {
 		a.state.Worktrees = msg.Worktrees
 		a.state.SubmittedPath = ""
 		a.markLoadingDone()
+		if a.state.Screen == ScreenBranch && len(a.state.Branches) == 0 {
+			a.setLoading("loading branches")
+			return LoadBranchesEffect{}
+		}
 		return nil
 	case BranchesLoadedResult:
 		if msg.Err != nil {

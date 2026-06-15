@@ -17,6 +17,9 @@ import (
 
 const maxVisibleBranches = 10
 
+const branchWarningPrefixColor = "\x1b[38;5;203m"
+const branchWarningResetColor = "\x1b[0m"
+
 type BranchScreen struct {
 	dialog          dialog.Model
 	search          textinput.Model
@@ -117,6 +120,9 @@ func (s *BranchScreen) View(width, height int, state app.State) string {
 		fitLine(fmt.Sprintf("Showing %s branches", scopeLabel(state.BranchScope)), leftWidth) + "   " + fitLine(branchLabel(state.Branch.SelectedName), rightWidth),
 		fitLine(s.search.View(), leftWidth) + "   " + fitLine("", rightWidth),
 		"",
+	}
+	if warning := branchSwitchWarning(state); warning != "" {
+		header = append(header, warning, "")
 	}
 	listHeight := screenMax(1, branchMin(maxVisibleBranches, height-len(header)))
 	leftBody := s.list.View(listHeight)
@@ -314,4 +320,26 @@ func branchLabel(name string) string {
 		return ""
 	}
 	return "Branch: " + name
+}
+
+func branchSwitchWarning(state app.State) string {
+	currentBranch := currentBranchName(state.Branches)
+	if currentBranch == "" {
+		return ""
+	}
+	for _, worktree := range state.Worktrees {
+		if worktree.Branch == currentBranch && worktree.HasUncommittedChanges {
+			return branchWarningPrefixColor + "warning" + branchWarningResetColor + " uncommitted files may prevent switching branches"
+		}
+	}
+	return ""
+}
+
+func currentBranchName(branches []branchsvc.Info) string {
+	for _, branch := range branches {
+		if branch.CheckedOutHere {
+			return branch.Name
+		}
+	}
+	return ""
 }
