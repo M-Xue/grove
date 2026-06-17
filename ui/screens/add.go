@@ -122,7 +122,7 @@ func (s *AddScreen) initHandlers() {
 }
 
 func (s *AddScreen) handleSubmit(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
-	return ctx.RunEffect(ctx.App.RequestAddWorktree(strings.TrimSpace(s.path.Value()), strings.TrimSpace(s.branch.Value())))
+	return ctx.Run(ctx.App.RequestAddWorktree(strings.TrimSpace(s.path.Value()), strings.TrimSpace(s.branch.Value())))
 }
 
 func (s *AddScreen) handleClose(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
@@ -153,7 +153,7 @@ func (s *AddScreen) handleSwitchFocus(ctx *ScreenContext, msg tea.KeyMsg) tea.Cm
 
 func (s *AddScreen) handleConfirmDialog(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
 	buttonID, _ := s.dialog.FocusedID()
-	return ctx.RunEffect(ctx.App.DialogChoose(buttonID))
+	return ctx.Run(ctx.App.DialogChoose(buttonID))
 }
 
 func (s *AddScreen) handleCancelDialog(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {

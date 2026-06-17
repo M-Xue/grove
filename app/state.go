@@ -2,28 +2,45 @@ package app
 
 import "fmt"
 
-func (a *App) setLoading(message string) {
+// setLoading appends a new active loading entry and returns its ID so the
+// completing Command can later mark or clear exactly that entry.
+func (a *App) setLoading(message string) string {
 	a.loadingCounter++
+	id := nextLoadingID(a.loadingCounter)
 	a.state.Loading = append(a.state.Loading, LoadingEntry{
-		ID:        nextLoadingID(a.loadingCounter),
+		ID:        id,
 		Active:    true,
 		Completed: false,
 		Message:   message,
 	})
+	return id
 }
 
-func (a *App) markLoadingDone() {
-	if len(a.state.Loading) == 0 {
-		return
-	}
-	for i := len(a.state.Loading) - 1; i >= 0; i-- {
-		if a.state.Loading[i].Active && !a.state.Loading[i].Completed {
+// markLoadingDone marks the loading entry with the given ID as completed,
+// leaving any other (still-pending) entries untouched.
+func (a *App) markLoadingDone(id string) {
+	for i := range a.state.Loading {
+		if a.state.Loading[i].ID == id {
 			a.state.Loading[i].Completed = true
 			return
 		}
 	}
 }
 
+// clearLoadingEntry removes the loading entry with the given ID, leaving any
+// other entries untouched. Used when a single task fails or is superseded.
+func (a *App) clearLoadingEntry(id string) {
+	filtered := a.state.Loading[:0]
+	for _, entry := range a.state.Loading {
+		if entry.ID == id {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	a.state.Loading = filtered
+}
+
+// clearLoading removes every loading entry. Used on screen transitions.
 func (a *App) clearLoading() {
 	a.state.Loading = nil
 }

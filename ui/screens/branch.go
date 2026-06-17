@@ -102,10 +102,10 @@ func (s *BranchScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.Stat
 	}
 	if consumed, cmd := s.search.Update(msg); consumed {
 		s.list.SetItems(filterItems(toBranchSelectItems(s.branches), s.search.Value()))
-		return tea.Batch(cmd, s.selectionEffect(ctx))
+		return tea.Batch(cmd, s.selectionCommand(ctx))
 	}
 	if consumed, cmd := s.list.Update(msg); consumed {
-		return tea.Batch(cmd, s.selectionEffect(ctx))
+		return tea.Batch(cmd, s.selectionCommand(ctx))
 	}
 	return nil
 }
@@ -203,30 +203,30 @@ func (s *BranchScreen) initHandlers() {
 func (s *BranchScreen) handleCheckout(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
 	item, ok := s.list.SelectedItem()
 	if !ok {
-		return ctx.RunEffect(ctx.App.RequestCheckoutBranch(""))
+		return ctx.Run(ctx.App.RequestCheckoutBranch(""))
 	}
-	return ctx.RunEffect(ctx.App.RequestCheckoutBranch(item.ID))
+	return ctx.Run(ctx.App.RequestCheckoutBranch(item.ID))
 }
 
 func (s *BranchScreen) handleFetch(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
-	return ctx.RunEffect(ctx.App.RequestFetchBranches())
+	return ctx.Run(ctx.App.RequestFetchBranches())
 }
 
 func (s *BranchScreen) handleDelete(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
 	item, ok := s.list.SelectedItem()
 	if !ok {
-		return ctx.RunEffect(ctx.App.RequestDeleteBranch(""))
+		return ctx.Run(ctx.App.RequestDeleteBranch(""))
 	}
-	return ctx.RunEffect(ctx.App.RequestDeleteBranch(item.ID))
+	return ctx.Run(ctx.App.RequestDeleteBranch(item.ID))
 }
 
 func (s *BranchScreen) handleDeleteAll(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
-	return ctx.RunEffect(ctx.App.RequestDeleteAllBranches())
+	return ctx.Run(ctx.App.RequestDeleteAllBranches())
 }
 
 func (s *BranchScreen) handleConfirmDialog(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
 	buttonID, _ := s.dialog.FocusedID()
-	return ctx.RunEffect(ctx.App.DialogChoose(buttonID))
+	return ctx.Run(ctx.App.DialogChoose(buttonID))
 }
 
 func (s *BranchScreen) handleCancelDialog(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
@@ -235,23 +235,23 @@ func (s *BranchScreen) handleCancelDialog(ctx *ScreenContext, msg tea.KeyMsg) te
 }
 
 func (s *BranchScreen) handleToggleScope(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
-	return ctx.RunEffect(ctx.App.RequestToggleBranchScope())
+	return ctx.Run(ctx.App.RequestToggleBranchScope())
 }
 
 func (s *BranchScreen) handleClose(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
-	return ctx.RunEffect(ctx.App.CloseBranch())
+	return ctx.Run(ctx.App.CloseBranch())
 }
 
 func (s *BranchScreen) handleQuit(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
 	return ctx.Quit()
 }
 
-func (s *BranchScreen) selectionEffect(ctx *ScreenContext) tea.Cmd {
+func (s *BranchScreen) selectionCommand(ctx *ScreenContext) tea.Cmd {
 	item, ok := s.list.SelectedItem()
 	if !ok {
-		return ctx.RunEffect(ctx.App.SelectBranch(""))
+		return ctx.Run(ctx.App.SelectBranch(""))
 	}
-	return ctx.RunEffect(ctx.App.SelectBranch(item.ID))
+	return ctx.Run(ctx.App.SelectBranch(item.ID))
 }
 
 func (s *BranchScreen) commitsView(width, height int, state app.State) string {

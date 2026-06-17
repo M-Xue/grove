@@ -11,7 +11,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-type effectMsg struct{ result app.Result }
+// appMsg is the private envelope that carries an app.Message produced by a
+// Command across the Bubble Tea bus.
+type appMsg struct{ msg app.Message }
 
 const (
 	horizontalPadding = 4
@@ -43,7 +45,7 @@ func New(application *app.App) *Model {
 }
 
 func (m *Model) Init() tea.Cmd {
-	return m.runEffect(m.app.Init())
+	return m.run(m.app.Init())
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -52,19 +54,22 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		return m, nil
-	case effectMsg:
+	case appMsg:
+		if _, ok := msg.msg.(app.QuitRequested); ok {
+			return m, tea.Quit
+		}
 		previousScreen := m.screen
-		effect := m.app.HandleResult(msg.result)
+		next := m.app.HandleMessage(msg.msg)
 		m.syncScreenTransitions(previousScreen, m.app.State().Screen)
 		m.syncScreens()
-		return m, m.runEffect(effect)
+		return m, m.run(next)
 	case tea.KeyMsg:
 		m.app.DismissCompletedLoading()
 		if len(m.app.State().Statuses) > 0 {
 			m.app.DismissStatuses()
 		}
 		m.syncScreens()
-		ctx := &screens.ScreenContext{App: m.app, RunEffect: m.runEffect, Quit: func() tea.Cmd { return tea.Quit }}
+		ctx := &screens.ScreenContext{App: m.app, Run: m.run, Quit: func() tea.Cmd { return tea.Quit }}
 		var cmd tea.Cmd
 		switch m.app.State().Screen {
 		case app.ScreenAdd:
@@ -160,76 +165,14 @@ func (m *Model) syncScreenTransitions(previous, current app.ScreenID) {
 	}
 }
 
-func (m *Model) runEffect(effect app.Effect) tea.Cmd {
-	services := m.app.Services()
-	switch effect := effect.(type) {
-	case nil:
+// run is the single bridge between app and Bubble Tea: it executes a Command's
+// thunk on a goroutine and wraps the returned Message in an appMsg envelope.
+func (m *Model) run(cmd app.Command) tea.Cmd {
+	if cmd == nil {
 		return nil
-	case app.LoadWorktreesEffect:
-		return func() tea.Msg {
-			worktrees, err := services.Worktree.List()
-			return effectMsg{result: app.WorktreesLoadedResult{Worktrees: worktrees, Err: err}}
-		}
-	case app.LoadBranchesEffect:
-		return func() tea.Msg {
-			branches, scope, err := services.Branch.List()
-			return effectMsg{result: app.BranchesLoadedResult{Branches: branches, Scope: scope, Err: err}}
-		}
-	case app.LoadBranchCommitsEffect:
-		return func() tea.Msg {
-			commits, err := services.Branch.RecentCommits(effect.Name, effect.Limit)
-			return effectMsg{result: app.BranchCommitsLoadedResult{Name: effect.Name, Commits: commits, Err: err}}
-		}
-	case app.ToggleBranchScopeEffect:
-		return func() tea.Msg {
-			services.Branch.ToggleScope()
-			branches, scope, err := services.Branch.List()
-			return effectMsg{result: app.BranchesLoadedResult{Branches: branches, Scope: scope, Err: err}}
-		}
-	case app.CheckoutBranchEffect:
-		return func() tea.Msg {
-			err := services.Branch.Checkout(effect.Name)
-			return effectMsg{result: app.BranchCheckedOutResult{Err: err}}
-		}
-	case app.DeleteBranchEffect:
-		return func() tea.Msg {
-			err := services.Branch.Delete(effect.Name)
-			return effectMsg{result: app.BranchDeletedResult{Err: err}}
-		}
-	case app.DeleteAllBranchesEffect:
-		return func() tea.Msg {
-			summary, err := services.Branch.DeleteAllLocal()
-			return effectMsg{result: app.AllBranchesDeletedResult{Deleted: summary.Deleted, Skipped: summary.Skipped, Err: err}}
-		}
-	case app.FetchBranchesEffect:
-		return func() tea.Msg {
-			err := services.Branch.Fetch()
-			return effectMsg{result: app.BranchesFetchedResult{Err: err}}
-		}
-	case app.CheckBranchExistsEffect:
-		return func() tea.Msg {
-			exists, err := services.Worktree.BranchExists(effect.Branch)
-			return effectMsg{result: app.BranchCheckedResult{Path: effect.Path, Branch: effect.Branch, Exists: exists, Err: err}}
-		}
-	case app.AddWorktreeEffect:
-		return func() tea.Msg {
-			var err error
-			if effect.CreateBranch {
-				err = services.Worktree.AddWithNewBranch(effect.Path, effect.Branch)
-			} else {
-				err = services.Worktree.Add(effect.Path, effect.Branch)
-			}
-			return effectMsg{result: app.WorktreeAddedResult{Err: err}}
-		}
-	case app.RemoveWorktreeEffect:
-		return func() tea.Msg {
-			err := services.Worktree.Remove(effect.Path)
-			return effectMsg{result: app.WorktreeRemovedResult{Path: effect.Path, Err: err}}
-		}
-	case app.QuitEffect:
-		return tea.Quit
-	default:
-		return nil
+	}
+	return func() tea.Msg {
+		return appMsg{msg: cmd()}
 	}
 }
 

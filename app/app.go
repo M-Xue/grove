@@ -1,9 +1,10 @@
 package app
 
 type App struct {
-	services       Services
-	state          State
-	loadingCounter int
+	services        Services
+	state           State
+	loadingCounter  int
+	branchCommitSeq int
 }
 
 type Option func(*App)
@@ -30,25 +31,17 @@ func New(services Services, options ...Option) *App {
 	return a
 }
 
-func (a *App) Init() Effect {
+func (a *App) Init() Command {
 	switch a.state.Screen {
 	case ScreenAdd:
 		return nil
-	case ScreenBranch:
-		a.setLoading("loading worktrees")
-		return LoadWorktreesEffect{}
 	default:
-		a.setLoading("loading worktrees")
-		return LoadWorktreesEffect{}
+		return a.loadWorktrees()
 	}
 }
 
 func (a *App) State() State {
 	return a.state
-}
-
-func (a *App) Services() Services {
-	return a.services
 }
 
 func (a *App) SubmittedPath() string {

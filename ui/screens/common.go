@@ -9,9 +9,9 @@ import (
 )
 
 type ScreenContext struct {
-	App       *app.App
-	RunEffect func(app.Effect) tea.Cmd
-	Quit      func() tea.Cmd
+	App  *app.App
+	Run  func(app.Command) tea.Cmd
+	Quit func() tea.Cmd
 }
 
 type Handler func(*ScreenContext, tea.KeyMsg) tea.Cmd

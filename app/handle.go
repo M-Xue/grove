@@ -7,7 +7,9 @@ import (
 	"github.com/M-Xue/grove/branch"
 )
 
-func (a *App) DialogChoose(buttonID string) Effect {
+// DialogChoose resolves an active dialog. Cancelling clears it; confirming
+// clears it and returns the Command for the chosen operation.
+func (a *App) DialogChoose(buttonID string) Command {
 	if !a.state.Dialog.Active {
 		return nil
 	}
@@ -19,53 +21,51 @@ func (a *App) DialogChoose(buttonID string) Effect {
 	case DialogConfirmRemove:
 		path := a.state.Dialog.Path
 		a.clearDialog()
-		a.setLoading("removing worktree")
-		return RemoveWorktreeEffect{Path: path}
+		return a.removeWorktree(path)
 	case DialogConfirmCreateBranch:
 		path := a.state.Dialog.Path
 		branchName := a.state.Dialog.Branch
 		a.clearDialog()
-		a.setLoading("creating branch and worktree")
-		return AddWorktreeEffect{Path: path, Branch: branchName, CreateBranch: true}
+		return a.addWorktree(path, branchName, true)
 	case DialogConfirmDeleteBranch:
 		branchName := a.state.Dialog.Branch
 		a.clearDialog()
-		a.setLoading("deleting branch")
-		return DeleteBranchEffect{Name: branchName}
+		return a.deleteBranch(branchName)
 	case DialogConfirmDeleteAllBranches:
 		a.clearDialog()
-		a.setLoading("deleting local branches")
-		return DeleteAllBranchesEffect{}
+		return a.deleteAllBranches()
 	default:
 		return nil
 	}
 }
 
-func (a *App) HandleResult(result Result) Effect {
-	switch msg := result.(type) {
-	case WorktreesLoadedResult:
+// HandleMessage applies a completed Command's Message to state and may return
+// the next Command to chain. It is an inspectable switch so app tests can drive
+// it directly.
+func (a *App) HandleMessage(message Message) Command {
+	switch msg := message.(type) {
+	case WorktreesLoadedMessage:
 		if msg.Err != nil {
-			a.clearLoading()
+			a.clearLoadingEntry(msg.LoadingID)
 			a.appendStatus(StatusError, msg.Err.Error())
 			return nil
 		}
 		a.state.Worktrees = msg.Worktrees
 		a.state.SubmittedPath = ""
-		a.markLoadingDone()
+		a.markLoadingDone(msg.LoadingID)
 		if a.state.Screen == ScreenBranch && len(a.state.Branches) == 0 {
-			a.setLoading("loading branches")
-			return LoadBranchesEffect{}
+			return a.loadBranches()
 		}
 		return nil
-	case BranchesLoadedResult:
+	case BranchesLoadedMessage:
 		if msg.Err != nil {
-			a.clearLoading()
+			a.clearLoadingEntry(msg.LoadingID)
 			a.appendStatus(StatusError, msg.Err.Error())
 			return nil
 		}
 		a.state.Branches = msg.Branches
 		a.state.BranchScope = msg.Scope
-		a.markLoadingDone()
+		a.markLoadingDone(msg.LoadingID)
 		if len(msg.Branches) == 0 {
 			a.state.Branch.SelectedName = ""
 			a.state.Branch.Commits = nil
@@ -76,45 +76,48 @@ func (a *App) HandleResult(result Result) Effect {
 			selected = msg.Branches[0].Name
 		}
 		a.state.Branch.SelectedName = selected
-		a.setLoading("loading branch commits")
-		return LoadBranchCommitsEffect{Name: selected, Limit: branchCommitPreviewLimit}
-	case BranchCommitsLoadedResult:
+		return a.loadBranchCommits(selected)
+	case BranchCommitsLoadedMessage:
+		if msg.Seq != a.branchCommitSeq {
+			// A newer selection superseded this request; drop the stale
+			// result and remove only its loading entry.
+			a.clearLoadingEntry(msg.LoadingID)
+			return nil
+		}
 		if msg.Err != nil {
-			a.clearLoading()
+			a.clearLoadingEntry(msg.LoadingID)
 			a.appendStatus(StatusError, msg.Err.Error())
 			return nil
 		}
 		a.state.Branch.SelectedName = msg.Name
 		a.state.Branch.Commits = msg.Commits
-		a.markLoadingDone()
+		a.markLoadingDone(msg.LoadingID)
 		return nil
-	case BranchCheckedOutResult:
+	case BranchCheckedOutMessage:
 		if msg.Err != nil {
-			a.clearLoading()
+			a.clearLoadingEntry(msg.LoadingID)
 			a.appendStatus(StatusError, msg.Err.Error())
 			return nil
 		}
-		a.markLoadingDone()
+		a.markLoadingDone(msg.LoadingID)
 		a.appendStatus(StatusSuccess, "branch switched")
-		a.setLoading("loading branches")
-		return LoadBranchesEffect{}
-	case BranchDeletedResult:
+		return a.loadBranches()
+	case BranchDeletedMessage:
 		if msg.Err != nil {
-			a.clearLoading()
+			a.clearLoadingEntry(msg.LoadingID)
 			a.appendStatus(StatusError, msg.Err.Error())
 			return nil
 		}
-		a.markLoadingDone()
+		a.markLoadingDone(msg.LoadingID)
 		a.appendStatus(StatusSuccess, "branch deleted")
-		a.setLoading("loading branches")
-		return LoadBranchesEffect{}
-	case AllBranchesDeletedResult:
+		return a.loadBranches()
+	case AllBranchesDeletedMessage:
 		if msg.Err != nil {
-			a.clearLoading()
+			a.clearLoadingEntry(msg.LoadingID)
 			a.appendStatus(StatusError, msg.Err.Error())
 			return nil
 		}
-		a.markLoadingDone()
+		a.markLoadingDone(msg.LoadingID)
 		if len(msg.Deleted) == 0 {
 			a.appendStatus(StatusInfo, "no local branches deleted")
 		} else {
@@ -123,27 +126,25 @@ func (a *App) HandleResult(result Result) Effect {
 		if len(msg.Skipped) > 0 {
 			a.appendStatus(StatusInfo, fmt.Sprintf("skipped checked out branches: %s", strings.Join(msg.Skipped, ", ")))
 		}
-		a.setLoading("loading branches")
-		return LoadBranchesEffect{}
-	case BranchesFetchedResult:
+		return a.loadBranches()
+	case BranchesFetchedMessage:
 		if msg.Err != nil {
-			a.clearLoading()
+			a.clearLoadingEntry(msg.LoadingID)
 			a.appendStatus(StatusError, msg.Err.Error())
 			return nil
 		}
-		a.markLoadingDone()
+		a.markLoadingDone(msg.LoadingID)
 		a.appendStatus(StatusSuccess, "fetch complete")
-		a.setLoading("loading branches")
-		return LoadBranchesEffect{}
-	case BranchCheckedResult:
+		return a.loadBranches()
+	case BranchCheckedMessage:
 		if msg.Err != nil {
+			a.clearLoadingEntry(msg.LoadingID)
 			a.appendStatus(StatusError, msg.Err.Error())
 			return nil
 		}
-		a.markLoadingDone()
+		a.markLoadingDone(msg.LoadingID)
 		if msg.Exists {
-			a.setLoading("adding worktree")
-			return AddWorktreeEffect{Path: msg.Path, Branch: msg.Branch, CreateBranch: false}
+			return a.addWorktree(msg.Path, msg.Branch, false)
 		}
 		a.state.Dialog = DialogState{
 			Active:      true,
@@ -156,28 +157,26 @@ func (a *App) HandleResult(result Result) Effect {
 			Branch:      msg.Branch,
 		}
 		return nil
-	case WorktreeAddedResult:
+	case WorktreeAddedMessage:
 		if msg.Err != nil {
-			a.clearLoading()
+			a.clearLoadingEntry(msg.LoadingID)
 			a.appendStatus(StatusError, msg.Err.Error())
 			return nil
 		}
-		a.markLoadingDone()
+		a.markLoadingDone(msg.LoadingID)
 		a.state.Screen = ScreenChange
 		a.appendStatus(StatusSuccess, "worktree added")
-		a.setLoading("loading worktrees")
-		return LoadWorktreesEffect{}
-	case WorktreeRemovedResult:
+		return a.loadWorktrees()
+	case WorktreeRemovedMessage:
 		if msg.Err != nil {
-			a.clearLoading()
+			a.clearLoadingEntry(msg.LoadingID)
 			a.appendStatus(StatusError, msg.Err.Error())
 			return nil
 		}
-		a.markLoadingDone()
+		a.markLoadingDone(msg.LoadingID)
 		a.state.Screen = ScreenChange
 		a.appendStatus(StatusSuccess, "worktree removed")
-		a.setLoading("loading worktrees")
-		return LoadWorktreesEffect{}
+		return a.loadWorktrees()
 	default:
 		return nil
 	}
