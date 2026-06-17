@@ -11,7 +11,7 @@ var (
 	ErrNotGitRepo           = errors.New("current directory is not a git repository")
 )
 
-type WorktreeInfo struct {
+type Info struct {
 	Path                  string
 	Branch                string
 	CommitLabel           string
@@ -25,10 +25,10 @@ type Runner interface {
 
 type Service interface {
 	Add(path, branch string) error
-	AddNewBranch(path, branch string) error
+	AddWithNewBranch(path, branch string) error
 	BranchExists(branch string) (bool, error)
 	InRepo() error
-	List() ([]WorktreeInfo, error)
+	List() ([]Info, error)
 	Remove(path string) error
 }
 
@@ -57,7 +57,7 @@ func (s manager) Add(path, branch string) error {
 	return err
 }
 
-func (s manager) AddNewBranch(path, branch string) error {
+func (s manager) AddWithNewBranch(path, branch string) error {
 	path, branch, err := validateAddInput(path, branch)
 	if err != nil {
 		return err
@@ -106,7 +106,7 @@ func (s manager) InRepo() error {
 	return nil
 }
 
-func (s manager) List() ([]WorktreeInfo, error) {
+func (s manager) List() ([]Info, error) {
 	output, err := s.runner.CombinedOutput("git", "worktree", "list", "--porcelain")
 	if err != nil {
 		return nil, err
@@ -117,7 +117,7 @@ func (s manager) List() ([]WorktreeInfo, error) {
 		return nil, err
 	}
 
-	worktrees := make([]WorktreeInfo, 0, len(entries))
+	worktrees := make([]Info, 0, len(entries))
 	for _, entry := range entries {
 		commitLabel, err := s.commitLabel(entry.path)
 		if err != nil {
@@ -129,7 +129,7 @@ func (s manager) List() ([]WorktreeInfo, error) {
 			return nil, err
 		}
 
-		worktrees = append(worktrees, WorktreeInfo{
+		worktrees = append(worktrees, Info{
 			Path:                  entry.path,
 			Branch:                normalizeBranch(entry.branch),
 			CommitLabel:           commitLabel,

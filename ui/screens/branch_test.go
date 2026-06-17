@@ -12,7 +12,7 @@ import (
 func TestBranchSwitchWarningShownForDirtyCurrentBranch(t *testing.T) {
 	state := app.State{
 		Branches: []branchsvc.Info{{Name: "feature/a", CheckedOutHere: true}},
-		Worktrees: []worktree.WorktreeInfo{{
+		Worktrees: []worktree.Info{{
 			Branch:                "feature/a",
 			HasUncommittedChanges: true,
 		}},
@@ -30,7 +30,7 @@ func TestBranchSwitchWarningShownForDirtyCurrentBranch(t *testing.T) {
 func TestBranchSwitchWarningHiddenWhenCurrentBranchClean(t *testing.T) {
 	state := app.State{
 		Branches: []branchsvc.Info{{Name: "feature/a", CheckedOutHere: true}},
-		Worktrees: []worktree.WorktreeInfo{{
+		Worktrees: []worktree.Info{{
 			Branch:                "feature/a",
 			HasUncommittedChanges: false,
 		}},

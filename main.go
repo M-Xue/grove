@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/M-Xue/grove/app"
-	branchsvc "github.com/M-Xue/grove/branch"
+	branchService "github.com/M-Xue/grove/branch"
 	"github.com/M-Xue/grove/ui"
 	"github.com/M-Xue/grove/worktree"
 	tea "github.com/charmbracelet/bubbletea"
@@ -38,7 +38,7 @@ func main() {
 
 	application := app.New(app.Services{
 		Worktree: worktreeService,
-		Branch:   branchsvc.NewService(),
+		Branch:   branchService.NewService(),
 	}, app.WithInitialScreen(cmd.Screen))
 
 	p := tea.NewProgram(ui.New(application), tea.WithAltScreen())

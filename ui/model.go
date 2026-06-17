@@ -215,7 +215,7 @@ func (m *Model) runEffect(effect app.Effect) tea.Cmd {
 		return func() tea.Msg {
 			var err error
 			if effect.CreateBranch {
-				err = services.Worktree.AddNewBranch(effect.Path, effect.Branch)
+				err = services.Worktree.AddWithNewBranch(effect.Path, effect.Branch)
 			} else {
 				err = services.Worktree.Add(effect.Path, effect.Branch)
 			}
