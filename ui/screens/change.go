@@ -140,9 +140,9 @@ func (s *ChangeScreen) initHandlers() {
 func (s *ChangeScreen) handleEnter(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
 	item, ok := s.list.SelectedItem()
 	if !ok {
-		return ctx.RunEffect(ctx.App.RequestSubmitSelectedPath(""))
+		return ctx.Run(ctx.App.RequestSubmitSelectedPath(""))
 	}
-	return ctx.RunEffect(ctx.App.RequestSubmitSelectedPath(item.ID))
+	return ctx.Run(ctx.App.RequestSubmitSelectedPath(item.ID))
 }
 
 func (s *ChangeScreen) handleOpenAdd(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
@@ -160,7 +160,7 @@ func (s *ChangeScreen) handleStartRemove(ctx *ScreenContext, msg tea.KeyMsg) tea
 	return nil
 }
 func (s *ChangeScreen) handleOpenBranches(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
-	return ctx.RunEffect(ctx.App.OpenBranch())
+	return ctx.Run(ctx.App.OpenBranch())
 }
 
 func (s *ChangeScreen) handleQuit(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
@@ -169,7 +169,7 @@ func (s *ChangeScreen) handleQuit(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
 
 func (s *ChangeScreen) handleConfirmDialog(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
 	buttonID, _ := s.dialog.FocusedID()
-	return ctx.RunEffect(ctx.App.DialogChoose(buttonID))
+	return ctx.Run(ctx.App.DialogChoose(buttonID))
 }
 
 func (s *ChangeScreen) handleCancelDialog(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {

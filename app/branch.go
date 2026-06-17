@@ -4,39 +4,35 @@ import "strings"
 
 const branchCommitPreviewLimit = 10
 
-func (a *App) OpenBranch() Effect {
+func (a *App) OpenBranch() Command {
 	a.state.Screen = ScreenBranch
 	a.clearDialog()
 	if len(a.state.Loading) > 0 {
 		a.clearLoading()
 	}
-	a.setLoading("loading branches")
-	return LoadBranchesEffect{}
+	return a.loadBranches()
 }
 
-func (a *App) CloseBranch() Effect {
+func (a *App) CloseBranch() Command {
 	a.state.Screen = ScreenChange
 	a.clearDialog()
 	a.clearLoading()
-	a.setLoading("loading worktrees")
-	return LoadWorktreesEffect{}
+	return a.loadWorktrees()
 }
 
-func (a *App) RequestCheckoutBranch(name string) Effect {
+func (a *App) RequestCheckoutBranch(name string) Command {
 	if name == "" {
 		a.appendStatus(StatusInfo, "no branch selected")
 		return nil
 	}
-	a.setLoading("switching branch")
-	return CheckoutBranchEffect{Name: name}
+	return a.checkoutBranch(name)
 }
 
-func (a *App) RequestToggleBranchScope() Effect {
-	a.setLoading("loading branches")
-	return ToggleBranchScopeEffect{}
+func (a *App) RequestToggleBranchScope() Command {
+	return a.toggleBranchScope()
 }
 
-func (a *App) RequestDeleteAllBranches() Effect {
+func (a *App) RequestDeleteAllBranches() Command {
 	if a.state.BranchScope != "local" {
 		a.appendStatus(StatusInfo, "switch to local branches before deleting")
 		return nil
@@ -67,7 +63,7 @@ func (a *App) RequestDeleteAllBranches() Effect {
 	return nil
 }
 
-func (a *App) SelectBranch(name string) Effect {
+func (a *App) SelectBranch(name string) Command {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		a.state.Branch.SelectedName = ""
@@ -78,11 +74,10 @@ func (a *App) SelectBranch(name string) Effect {
 		return nil
 	}
 	a.state.Branch.SelectedName = name
-	a.setLoading("loading branch commits")
-	return LoadBranchCommitsEffect{Name: name, Limit: branchCommitPreviewLimit}
+	return a.loadBranchCommits(name)
 }
 
-func (a *App) RequestDeleteBranch(name string) Effect {
+func (a *App) RequestDeleteBranch(name string) Command {
 	if name == "" {
 		a.appendStatus(StatusInfo, "no branch selected")
 		return nil
@@ -99,7 +94,6 @@ func (a *App) RequestDeleteBranch(name string) Effect {
 	return nil
 }
 
-func (a *App) RequestFetchBranches() Effect {
-	a.setLoading("fetching branches")
-	return FetchBranchesEffect{}
+func (a *App) RequestFetchBranches() Command {
+	return a.fetchBranches()
 }

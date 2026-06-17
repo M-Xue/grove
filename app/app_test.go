@@ -7,79 +7,84 @@ import (
 	"github.com/M-Xue/grove/branch"
 )
 
-func TestRequestSubmitSelectedPathSetsOutput(t *testing.T) {
+func TestRequestSubmitSelectedPathRequestsQuit(t *testing.T) {
 	a := New(Services{})
-	effect := a.RequestSubmitSelectedPath("/repo")
-	if _, ok := effect.(QuitEffect); !ok {
-		t.Fatalf("expected QuitEffect, got %#v", effect)
+	cmd := a.RequestSubmitSelectedPath("/repo")
+	if cmd == nil {
+		t.Fatal("expected a command")
 	}
 	if a.SubmittedPath() != "/repo" {
 		t.Fatalf("unexpected submitted path: %q", a.SubmittedPath())
 	}
+	if _, ok := cmd().(QuitRequested); !ok {
+		t.Fatalf("expected QuitRequested message, got %#v", cmd())
+	}
 }
 
-func TestInitUsesInitialScreenEffect(t *testing.T) {
+func TestInitUsesInitialScreen(t *testing.T) {
 	tests := []struct {
-		name   string
-		screen ScreenID
-		want   any
+		name        string
+		screen      ScreenID
+		wantCommand bool
+		wantLoading string
 	}{
-		{name: "change", screen: ScreenChange, want: LoadWorktreesEffect{}},
-		{name: "add", screen: ScreenAdd, want: nil},
-		{name: "branch", screen: ScreenBranch, want: LoadWorktreesEffect{}},
+		{name: "change", screen: ScreenChange, wantCommand: true, wantLoading: "loading worktrees"},
+		{name: "add", screen: ScreenAdd, wantCommand: false},
+		{name: "branch", screen: ScreenBranch, wantCommand: true, wantLoading: "loading worktrees"},
 	}
 
 	for _, test := range tests {
 		a := New(Services{}, WithInitialScreen(test.screen))
-		got := a.Init()
-		switch want := test.want.(type) {
-		case nil:
-			if got != nil {
-				t.Fatalf("%s: expected nil effect, got %#v", test.name, got)
+		cmd := a.Init()
+		if test.wantCommand {
+			if cmd == nil {
+				t.Fatalf("%s: expected a command", test.name)
 			}
-		default:
-			if got != want {
-				t.Fatalf("%s: expected %#v, got %#v", test.name, want, got)
+			if len(a.State().Loading) != 1 || a.State().Loading[0].Message != test.wantLoading {
+				t.Fatalf("%s: expected loading %q, got %#v", test.name, test.wantLoading, a.State().Loading)
 			}
+		} else if cmd != nil {
+			t.Fatalf("%s: expected nil command, got %#v", test.name, cmd)
 		}
 	}
 }
 
 func TestSelectBranchLoadsCommitsForSelection(t *testing.T) {
 	a := New(Services{})
-	effect := a.SelectBranch("feature/a")
-	loadEffect, ok := effect.(LoadBranchCommitsEffect)
-	if !ok {
-		t.Fatalf("expected LoadBranchCommitsEffect, got %#v", effect)
+	cmd := a.SelectBranch("feature/a")
+	if cmd == nil {
+		t.Fatal("expected a command to load commits")
 	}
-	if loadEffect.Name != "feature/a" || loadEffect.Limit != branchCommitPreviewLimit {
-		t.Fatalf("unexpected load effect: %#v", loadEffect)
+	if a.State().Branch.SelectedName != "feature/a" {
+		t.Fatalf("unexpected selection: %q", a.State().Branch.SelectedName)
+	}
+	if len(a.State().Loading) != 1 || a.State().Loading[0].Message != "loading branch commits" {
+		t.Fatalf("expected commit-loading entry, got %#v", a.State().Loading)
 	}
 }
 
 func TestHandleBranchesLoadedRequestsCommitPreviewForSelection(t *testing.T) {
 	a := New(Services{})
-	effect := a.HandleResult(BranchesLoadedResult{Branches: []branch.Info{{Name: "feature/a"}}})
-	loadEffect, ok := effect.(LoadBranchCommitsEffect)
-	if !ok {
-		t.Fatalf("expected LoadBranchCommitsEffect, got %#v", effect)
+	cmd := a.HandleMessage(BranchesLoadedMessage{Branches: []branch.Info{{Name: "feature/a"}}})
+	if cmd == nil {
+		t.Fatal("expected a command to load commits")
 	}
-	if loadEffect.Name != "feature/a" {
-		t.Fatalf("unexpected branch name: %q", loadEffect.Name)
+	if a.State().Branch.SelectedName != "feature/a" {
+		t.Fatalf("unexpected branch name: %q", a.State().Branch.SelectedName)
 	}
 }
 
 func TestBranchInitLoadsBranchesAfterWorktrees(t *testing.T) {
 	a := New(Services{}, WithInitialScreen(ScreenBranch))
 
-	effect := a.Init()
-	if effect != (LoadWorktreesEffect{}) {
-		t.Fatalf("expected LoadWorktreesEffect, got %#v", effect)
+	if cmd := a.Init(); cmd == nil {
+		t.Fatal("expected a command from Init")
 	}
 
-	effect = a.HandleResult(WorktreesLoadedResult{})
-	if effect != (LoadBranchesEffect{}) {
-		t.Fatalf("expected LoadBranchesEffect after worktrees, got %#v", effect)
+	worktreeID := a.State().Loading[0].ID
+	next := a.HandleMessage(WorktreesLoadedMessage{LoadingID: worktreeID})
+	if next == nil {
+		t.Fatal("expected a command to load branches after worktrees")
 	}
 
 	state := a.State()
@@ -96,8 +101,8 @@ func TestBranchInitLoadsBranchesAfterWorktrees(t *testing.T) {
 
 func TestRequestAddWorktreeRequiresPathAndBranch(t *testing.T) {
 	a := New(Services{})
-	if effect := a.RequestAddWorktree("", "branch"); effect != nil {
-		t.Fatal("expected nil effect for invalid path")
+	if cmd := a.RequestAddWorktree("", "branch"); cmd != nil {
+		t.Fatal("expected nil command for invalid path")
 	}
 	if len(a.State().Statuses) != 1 {
 		t.Fatalf("expected one status, got %d", len(a.State().Statuses))
@@ -107,16 +112,19 @@ func TestRequestAddWorktreeRequiresPathAndBranch(t *testing.T) {
 func TestDialogChooseCancelClearsDialog(t *testing.T) {
 	a := New(Services{})
 	a.RequestRemoveWorktree("/repo")
-	a.DialogChoose("cancel")
+	if cmd := a.DialogChoose("cancel"); cmd != nil {
+		t.Fatal("expected nil command on cancel")
+	}
 	if a.State().Dialog.Active {
 		t.Fatal("expected dialog to clear")
 	}
 }
 
-func TestHandleResultMarksLoadingDoneOnSuccess(t *testing.T) {
+func TestHandleMessageMarksLoadingDoneOnSuccess(t *testing.T) {
 	a := New(Services{})
 	a.Init()
-	a.HandleResult(WorktreesLoadedResult{})
+	id := a.State().Loading[0].ID
+	a.HandleMessage(WorktreesLoadedMessage{LoadingID: id})
 	state := a.State()
 	if len(state.Loading) != 1 || !state.Loading[0].Active || !state.Loading[0].Completed {
 		t.Fatalf("expected completed loading state, got %#v", state.Loading)
@@ -132,29 +140,47 @@ func TestHandleResultMarksLoadingDoneOnSuccess(t *testing.T) {
 
 func TestSequentialLoadingStatesArePreserved(t *testing.T) {
 	a := New(Services{})
-	a.setLoading("checking branch")
-	a.setLoading("adding worktree")
+	id1 := a.setLoading("checking branch")
+	id2 := a.setLoading("adding worktree")
 	if len(a.State().Loading) != 2 {
 		t.Fatalf("expected 2 loading entries, got %d", len(a.State().Loading))
 	}
-	a.markLoadingDone()
-	a.markLoadingDone()
+	a.markLoadingDone(id1)
+	a.markLoadingDone(id2)
 	state := a.State()
 	if !state.Loading[0].Completed || !state.Loading[1].Completed {
 		t.Fatalf("expected both loading entries completed, got %#v", state.Loading)
 	}
 }
 
+func TestConcurrentLoadingClearsOnlyCompletedEntry(t *testing.T) {
+	a := New(Services{})
+	id1 := a.setLoading("first")
+	id2 := a.setLoading("second")
+	a.markLoadingDone(id1)
+	state := a.State()
+	if len(state.Loading) != 2 {
+		t.Fatalf("expected both entries to remain, got %#v", state.Loading)
+	}
+	if !state.Loading[0].Completed {
+		t.Fatalf("expected first entry completed, got %#v", state.Loading[0])
+	}
+	if state.Loading[1].Completed {
+		t.Fatalf("expected second entry still pending, got %#v", state.Loading[1])
+	}
+	_ = id2
+}
+
 func TestBranchCheckedPreservesCompletedCheckingPhase(t *testing.T) {
 	a := New(Services{})
-	a.setLoading("checking branch")
-	effect := a.HandleResult(BranchCheckedResult{Path: "../repo", Branch: "feature", Exists: true})
-	if _, ok := effect.(AddWorktreeEffect); !ok {
-		t.Fatalf("expected AddWorktreeEffect, got %#v", effect)
+	id := a.setLoading("checking branch")
+	cmd := a.HandleMessage(BranchCheckedMessage{LoadingID: id, Path: "../repo", Branch: "feature", Exists: true})
+	if cmd == nil {
+		t.Fatal("expected an add-worktree command")
 	}
 	state := a.State()
 	if len(state.Loading) != 2 {
-		t.Fatalf("expected 2 loading entries, got %d", len(state.Loading))
+		t.Fatalf("expected 2 loading entries, got %#v", state.Loading)
 	}
 	if state.Loading[0].Message != "checking branch" || !state.Loading[0].Completed {
 		t.Fatalf("expected completed checking branch entry, got %#v", state.Loading[0])
@@ -164,10 +190,46 @@ func TestBranchCheckedPreservesCompletedCheckingPhase(t *testing.T) {
 	}
 }
 
+func TestStaleBranchCommitMessagesAreDropped(t *testing.T) {
+	a := New(Services{})
+	a.SelectBranch("feature-a") // seq 1
+	a.SelectBranch("feature-b") // seq 2
+
+	staleID := a.State().Loading[0].ID
+	freshID := a.State().Loading[1].ID
+
+	// A stale result (seq 1) must be dropped and only its loading entry removed.
+	if cmd := a.HandleMessage(BranchCommitsLoadedMessage{
+		LoadingID: staleID,
+		Seq:       1,
+		Name:      "feature-a",
+		Commits:   []branch.CommitInfo{{Hash: "abc"}},
+	}); cmd != nil {
+		t.Fatal("expected nil command for stale message")
+	}
+	if len(a.State().Branch.Commits) != 0 {
+		t.Fatalf("expected stale commits dropped, got %#v", a.State().Branch.Commits)
+	}
+	if a.State().Branch.SelectedName != "feature-b" {
+		t.Fatalf("expected selection to remain feature-b, got %q", a.State().Branch.SelectedName)
+	}
+
+	// The fresh result (seq 2) is applied.
+	a.HandleMessage(BranchCommitsLoadedMessage{
+		LoadingID: freshID,
+		Seq:       2,
+		Name:      "feature-b",
+		Commits:   []branch.CommitInfo{{Hash: "def"}},
+	})
+	if a.State().Branch.SelectedName != "feature-b" || len(a.State().Branch.Commits) != 1 {
+		t.Fatalf("expected fresh commits applied, got %#v", a.State().Branch)
+	}
+}
+
 func TestRequestCheckoutBranchRequiresSelection(t *testing.T) {
 	a := New(Services{})
-	if effect := a.RequestCheckoutBranch(""); effect != nil {
-		t.Fatalf("expected nil effect, got %#v", effect)
+	if cmd := a.RequestCheckoutBranch(""); cmd != nil {
+		t.Fatalf("expected nil command, got %#v", cmd)
 	}
 	if len(a.State().Statuses) != 1 {
 		t.Fatalf("expected one status, got %d", len(a.State().Statuses))
@@ -176,8 +238,8 @@ func TestRequestCheckoutBranchRequiresSelection(t *testing.T) {
 
 func TestRequestDeleteBranchRequiresSelection(t *testing.T) {
 	a := New(Services{})
-	if effect := a.RequestDeleteBranch(""); effect != nil {
-		t.Fatalf("expected nil effect, got %#v", effect)
+	if cmd := a.RequestDeleteBranch(""); cmd != nil {
+		t.Fatalf("expected nil command, got %#v", cmd)
 	}
 	if len(a.State().Statuses) != 1 {
 		t.Fatalf("expected one status, got %d", len(a.State().Statuses))
@@ -186,8 +248,8 @@ func TestRequestDeleteBranchRequiresSelection(t *testing.T) {
 
 func TestRequestDeleteBranchOpensConfirmationDialog(t *testing.T) {
 	a := New(Services{})
-	if effect := a.RequestDeleteBranch("feature/a"); effect != nil {
-		t.Fatalf("expected nil effect, got %#v", effect)
+	if cmd := a.RequestDeleteBranch("feature/a"); cmd != nil {
+		t.Fatalf("expected nil command, got %#v", cmd)
 	}
 	state := a.State()
 	if !state.Dialog.Active {
@@ -201,24 +263,23 @@ func TestRequestDeleteBranchOpensConfirmationDialog(t *testing.T) {
 	}
 }
 
-func TestDialogChooseDeleteBranchReturnsDeleteEffect(t *testing.T) {
+func TestDialogChooseDeleteBranchReturnsCommand(t *testing.T) {
 	a := New(Services{})
 	a.RequestDeleteBranch("feature/a")
-	effect := a.DialogChoose("confirm")
-	deleteEffect, ok := effect.(DeleteBranchEffect)
-	if !ok {
-		t.Fatalf("expected DeleteBranchEffect, got %#v", effect)
+	cmd := a.DialogChoose("confirm")
+	if cmd == nil {
+		t.Fatal("expected a delete command")
 	}
-	if deleteEffect.Name != "feature/a" {
-		t.Fatalf("unexpected branch name: %q", deleteEffect.Name)
+	if len(a.State().Loading) != 1 || a.State().Loading[0].Message != "deleting branch" {
+		t.Fatalf("expected delete-branch loading entry, got %#v", a.State().Loading)
 	}
 }
 
 func TestRequestDeleteAllBranchesRequiresLocalScope(t *testing.T) {
 	a := New(Services{})
 	a.state.BranchScope = branch.ScopeRemoteTracking
-	if effect := a.RequestDeleteAllBranches(); effect != nil {
-		t.Fatalf("expected nil effect, got %#v", effect)
+	if cmd := a.RequestDeleteAllBranches(); cmd != nil {
+		t.Fatalf("expected nil command, got %#v", cmd)
 	}
 	if len(a.State().Statuses) != 1 {
 		t.Fatalf("expected one status, got %d", len(a.State().Statuses))
@@ -228,8 +289,8 @@ func TestRequestDeleteAllBranchesRequiresLocalScope(t *testing.T) {
 func TestRequestDeleteAllBranchesRequiresLoadedBranches(t *testing.T) {
 	a := New(Services{})
 	a.state.BranchScope = branch.ScopeLocal
-	if effect := a.RequestDeleteAllBranches(); effect != nil {
-		t.Fatalf("expected nil effect, got %#v", effect)
+	if cmd := a.RequestDeleteAllBranches(); cmd != nil {
+		t.Fatalf("expected nil command, got %#v", cmd)
 	}
 	if len(a.State().Statuses) != 1 {
 		t.Fatalf("expected one status, got %d", len(a.State().Statuses))
@@ -240,8 +301,8 @@ func TestRequestDeleteAllBranchesOpensConfirmationDialog(t *testing.T) {
 	a := New(Services{})
 	a.state.BranchScope = branch.ScopeLocal
 	a.state.Branches = []branch.Info{{Name: "feature/a"}, {Name: "main"}}
-	if effect := a.RequestDeleteAllBranches(); effect != nil {
-		t.Fatalf("expected nil effect, got %#v", effect)
+	if cmd := a.RequestDeleteAllBranches(); cmd != nil {
+		t.Fatalf("expected nil command, got %#v", cmd)
 	}
 	state := a.State()
 	if !state.Dialog.Active {
@@ -255,14 +316,16 @@ func TestRequestDeleteAllBranchesOpensConfirmationDialog(t *testing.T) {
 	}
 }
 
-func TestDialogChooseDeleteAllBranchesReturnsDeleteEffect(t *testing.T) {
+func TestDialogChooseDeleteAllBranchesReturnsCommand(t *testing.T) {
 	a := New(Services{})
 	a.state.BranchScope = branch.ScopeLocal
 	a.state.Branches = []branch.Info{{Name: "feature/a"}}
 	a.RequestDeleteAllBranches()
-	effect := a.DialogChoose("confirm")
-	_, ok := effect.(DeleteAllBranchesEffect)
-	if !ok {
-		t.Fatalf("expected DeleteAllBranchesEffect, got %#v", effect)
+	cmd := a.DialogChoose("confirm")
+	if cmd == nil {
+		t.Fatal("expected a delete-all command")
+	}
+	if len(a.State().Loading) != 1 || a.State().Loading[0].Message != "deleting local branches" {
+		t.Fatalf("expected delete-all loading entry, got %#v", a.State().Loading)
 	}
 }

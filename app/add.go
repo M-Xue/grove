@@ -16,7 +16,7 @@ func (a *App) CloseAdd() {
 	a.clearLoading()
 }
 
-func (a *App) RequestAddWorktree(path, branch string) Effect {
+func (a *App) RequestAddWorktree(path, branch string) Command {
 	if path == "" {
 		a.appendStatus(StatusInfo, "worktree path is required")
 		return nil
@@ -25,6 +25,5 @@ func (a *App) RequestAddWorktree(path, branch string) Effect {
 		a.appendStatus(StatusInfo, "branch name is required")
 		return nil
 	}
-	a.setLoading("checking branch")
-	return CheckBranchExistsEffect{Path: path, Branch: branch}
+	return a.checkBranchExists(path, branch)
 }
