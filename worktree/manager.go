@@ -8,7 +8,6 @@ import (
 var (
 	ErrWorktreePathRequired = errors.New("worktree path is required")
 	ErrBranchNameRequired   = errors.New("branch name is required")
-	ErrNotGitRepo           = errors.New("current directory is not a git repository")
 )
 
 type Info struct {
@@ -27,7 +26,6 @@ type Service interface {
 	Add(path, branch string) error
 	AddWithNewBranch(path, branch string) error
 	BranchExists(branch string) (bool, error)
-	InRepo() error
 	List() ([]Info, error)
 	Remove(path string) error
 }
@@ -87,17 +85,6 @@ func (s manager) BranchExists(branch string) (bool, error) {
 		return false, err
 	}
 	return strings.TrimSpace(string(output)) == branch, nil
-}
-
-func (s manager) InRepo() error {
-	output, err := s.runner.CombinedOutput("git", "rev-parse", "--is-inside-work-tree")
-	if err != nil {
-		return ErrNotGitRepo
-	}
-	if strings.TrimSpace(string(output)) != "true" {
-		return ErrNotGitRepo
-	}
-	return nil
 }
 
 func (s manager) List() ([]Info, error) {
