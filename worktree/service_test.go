@@ -48,15 +48,15 @@ func commandKey(name string, args ...string) string {
 	return name + "\x00" + joinArgs(args)
 }
 
-func TestManagerAddRunsGitWorktreeAdd(t *testing.T) {
+func TestServiceAddRunsGitWorktreeAdd(t *testing.T) {
 	runner := &stubRunner{
 		results: map[string]commandResult{
 			commandKey("git", "worktree", "add", "../feature-auth", "feature/auth"): {},
 		},
 	}
-	manager := NewService(runner)
+	service := NewService(runner)
 
-	err := manager.Add("../feature-auth", "feature/auth")
+	err := service.Add("../feature-auth", "feature/auth")
 	if err != nil {
 		t.Fatalf("Add returned error: %v", err)
 	}
@@ -71,11 +71,11 @@ func TestManagerAddRunsGitWorktreeAdd(t *testing.T) {
 	}
 }
 
-func TestManagerAddRequiresPath(t *testing.T) {
+func TestServiceAddRequiresPath(t *testing.T) {
 	runner := &stubRunner{}
-	manager := NewService(runner)
+	service := NewService(runner)
 
-	err := manager.Add("   ", "feature/auth")
+	err := service.Add("   ", "feature/auth")
 	if err == nil {
 		t.Fatal("expected error for missing path")
 	}
@@ -87,11 +87,11 @@ func TestManagerAddRequiresPath(t *testing.T) {
 	}
 }
 
-func TestManagerAddRequiresBranch(t *testing.T) {
+func TestServiceAddRequiresBranch(t *testing.T) {
 	runner := &stubRunner{}
-	manager := NewService(runner)
+	service := NewService(runner)
 
-	err := manager.Add("../feature-auth", " ")
+	err := service.Add("../feature-auth", " ")
 	if err == nil {
 		t.Fatal("expected error for missing branch")
 	}
@@ -103,15 +103,15 @@ func TestManagerAddRequiresBranch(t *testing.T) {
 	}
 }
 
-func TestManagerAddReturnsRunnerError(t *testing.T) {
+func TestServiceAddReturnsRunnerError(t *testing.T) {
 	runner := &stubRunner{
 		results: map[string]commandResult{
 			commandKey("git", "worktree", "add", "../feature-auth", "feature/auth"): {err: errors.New("git failed")},
 		},
 	}
-	manager := NewService(runner)
+	service := NewService(runner)
 
-	err := manager.Add("../feature-auth", "feature/auth")
+	err := service.Add("../feature-auth", "feature/auth")
 	if err == nil {
 		t.Fatal("expected runner error")
 	}
@@ -120,15 +120,15 @@ func TestManagerAddReturnsRunnerError(t *testing.T) {
 	}
 }
 
-func TestManagerAddNewBranchRunsGitWorktreeAddWithBranchCreation(t *testing.T) {
+func TestServiceAddNewBranchRunsGitWorktreeAddWithBranchCreation(t *testing.T) {
 	runner := &stubRunner{
 		results: map[string]commandResult{
 			commandKey("git", "worktree", "add", "-b", "feature/auth", "../feature-auth"): {},
 		},
 	}
-	manager := NewService(runner)
+	service := NewService(runner)
 
-	err := manager.AddWithNewBranch("../feature-auth", "feature/auth")
+	err := service.AddWithNewBranch("../feature-auth", "feature/auth")
 	if err != nil {
 		t.Fatalf("AddNewBranch returned error: %v", err)
 	}
@@ -139,15 +139,15 @@ func TestManagerAddNewBranchRunsGitWorktreeAddWithBranchCreation(t *testing.T) {
 	}
 }
 
-func TestManagerRemoveRunsGitWorktreeRemove(t *testing.T) {
+func TestServiceRemoveRunsGitWorktreeRemove(t *testing.T) {
 	runner := &stubRunner{
 		results: map[string]commandResult{
 			commandKey("git", "worktree", "remove", "../feature-auth"): {},
 		},
 	}
-	manager := NewService(runner)
+	service := NewService(runner)
 
-	err := manager.Remove("../feature-auth")
+	err := service.Remove("../feature-auth")
 	if err != nil {
 		t.Fatalf("Remove returned error: %v", err)
 	}
@@ -158,11 +158,11 @@ func TestManagerRemoveRunsGitWorktreeRemove(t *testing.T) {
 	}
 }
 
-func TestManagerRemoveRequiresPath(t *testing.T) {
+func TestServiceRemoveRequiresPath(t *testing.T) {
 	runner := &stubRunner{}
-	manager := NewService(runner)
+	service := NewService(runner)
 
-	err := manager.Remove(" ")
+	err := service.Remove(" ")
 	if err == nil {
 		t.Fatal("expected error for missing path")
 	}
@@ -174,15 +174,15 @@ func TestManagerRemoveRequiresPath(t *testing.T) {
 	}
 }
 
-func TestManagerRemoveReturnsRunnerError(t *testing.T) {
+func TestServiceRemoveReturnsRunnerError(t *testing.T) {
 	runner := &stubRunner{
 		results: map[string]commandResult{
 			commandKey("git", "worktree", "remove", "../feature-auth"): {err: errors.New("git failed")},
 		},
 	}
-	manager := NewService(runner)
+	service := NewService(runner)
 
-	err := manager.Remove("../feature-auth")
+	err := service.Remove("../feature-auth")
 	if err == nil {
 		t.Fatal("expected runner error")
 	}
@@ -191,7 +191,7 @@ func TestManagerRemoveReturnsRunnerError(t *testing.T) {
 	}
 }
 
-func TestManagerBranchExistsReturnsTrueForExistingBranch(t *testing.T) {
+func TestServiceBranchExistsReturnsTrueForExistingBranch(t *testing.T) {
 	runner := &stubRunner{
 		results: map[string]commandResult{
 			commandKey("git", "for-each-ref", "--format=%(refname:short)", "refs/heads/feature/auth"): {
@@ -199,9 +199,9 @@ func TestManagerBranchExistsReturnsTrueForExistingBranch(t *testing.T) {
 			},
 		},
 	}
-	manager := NewService(runner)
+	service := NewService(runner)
 
-	exists, err := manager.BranchExists("feature/auth")
+	exists, err := service.BranchExists("feature/auth")
 	if err != nil {
 		t.Fatalf("BranchExists returned error: %v", err)
 	}
@@ -210,7 +210,7 @@ func TestManagerBranchExistsReturnsTrueForExistingBranch(t *testing.T) {
 	}
 }
 
-func TestManagerBranchExistsReturnsFalseForMissingBranch(t *testing.T) {
+func TestServiceBranchExistsReturnsFalseForMissingBranch(t *testing.T) {
 	runner := &stubRunner{
 		results: map[string]commandResult{
 			commandKey("git", "for-each-ref", "--format=%(refname:short)", "refs/heads/feature/auth"): {
@@ -218,9 +218,9 @@ func TestManagerBranchExistsReturnsFalseForMissingBranch(t *testing.T) {
 			},
 		},
 	}
-	manager := NewService(runner)
+	service := NewService(runner)
 
-	exists, err := manager.BranchExists("feature/auth")
+	exists, err := service.BranchExists("feature/auth")
 	if err != nil {
 		t.Fatalf("BranchExists returned error: %v", err)
 	}
@@ -229,11 +229,11 @@ func TestManagerBranchExistsReturnsFalseForMissingBranch(t *testing.T) {
 	}
 }
 
-func TestManagerBranchExistsRequiresBranch(t *testing.T) {
+func TestServiceBranchExistsRequiresBranch(t *testing.T) {
 	runner := &stubRunner{}
-	manager := NewService(runner)
+	service := NewService(runner)
 
-	_, err := manager.BranchExists(" ")
+	_, err := service.BranchExists(" ")
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
@@ -245,7 +245,7 @@ func TestManagerBranchExistsRequiresBranch(t *testing.T) {
 	}
 }
 
-func TestManagerListReturnsStructuredWorktrees(t *testing.T) {
+func TestServiceListReturnsStructuredWorktrees(t *testing.T) {
 	runner := &stubRunner{
 		results: map[string]commandResult{
 			commandKey("git", "worktree", "list", "--porcelain"): {
@@ -266,8 +266,8 @@ func TestManagerListReturnsStructuredWorktrees(t *testing.T) {
 		},
 	}
 
-	manager := NewService(runner)
-	got, err := manager.List()
+	service := NewService(runner)
+	got, err := service.List()
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -294,7 +294,7 @@ func TestManagerListReturnsStructuredWorktrees(t *testing.T) {
 	}
 }
 
-func TestManagerListSupportsDetachedHead(t *testing.T) {
+func TestServiceListSupportsDetachedHead(t *testing.T) {
 	runner := &stubRunner{
 		results: map[string]commandResult{
 			commandKey("git", "worktree", "list", "--porcelain"): {
@@ -309,8 +309,8 @@ func TestManagerListSupportsDetachedHead(t *testing.T) {
 		},
 	}
 
-	manager := NewService(runner)
-	got, err := manager.List()
+	service := NewService(runner)
+	got, err := service.List()
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -323,7 +323,7 @@ func TestManagerListSupportsDetachedHead(t *testing.T) {
 	}
 }
 
-func TestManagerListIgnoresUntrackedFilesForDirtyState(t *testing.T) {
+func TestServiceListIgnoresUntrackedFilesForDirtyState(t *testing.T) {
 	runner := &stubRunner{
 		results: map[string]commandResult{
 			commandKey("git", "worktree", "list", "--porcelain"): {
@@ -338,8 +338,8 @@ func TestManagerListIgnoresUntrackedFilesForDirtyState(t *testing.T) {
 		},
 	}
 
-	manager := NewService(runner)
-	got, err := manager.List()
+	service := NewService(runner)
+	got, err := service.List()
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}

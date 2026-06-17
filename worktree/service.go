@@ -30,16 +30,16 @@ type Service interface {
 	Remove(path string) error
 }
 
-type manager struct {
+type service struct {
 	runner Runner
 }
 
 // NewService returns a worktree Service backed by the injected command runner.
 func NewService(runner Runner) Service {
-	return manager{runner: runner}
+	return service{runner: runner}
 }
 
-func (s manager) Add(path, branch string) error {
+func (s service) Add(path, branch string) error {
 	path, branch, err := validateAddInput(path, branch)
 	if err != nil {
 		return err
@@ -49,7 +49,7 @@ func (s manager) Add(path, branch string) error {
 	return err
 }
 
-func (s manager) AddWithNewBranch(path, branch string) error {
+func (s service) AddWithNewBranch(path, branch string) error {
 	path, branch, err := validateAddInput(path, branch)
 	if err != nil {
 		return err
@@ -59,7 +59,7 @@ func (s manager) AddWithNewBranch(path, branch string) error {
 	return err
 }
 
-func (s manager) Remove(path string) error {
+func (s service) Remove(path string) error {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return ErrWorktreePathRequired
@@ -69,7 +69,7 @@ func (s manager) Remove(path string) error {
 	return err
 }
 
-func (s manager) BranchExists(branch string) (bool, error) {
+func (s service) BranchExists(branch string) (bool, error) {
 	branch = strings.TrimSpace(branch)
 	if branch == "" {
 		return false, ErrBranchNameRequired
@@ -87,7 +87,7 @@ func (s manager) BranchExists(branch string) (bool, error) {
 	return strings.TrimSpace(string(output)) == branch, nil
 }
 
-func (s manager) List() ([]Info, error) {
+func (s service) List() ([]Info, error) {
 	output, err := s.runner.CombinedOutput("git", "worktree", "list", "--porcelain")
 	if err != nil {
 		return nil, err
@@ -122,7 +122,7 @@ func (s manager) List() ([]Info, error) {
 	return worktrees, nil
 }
 
-func (s manager) commitLabel(path string) (string, error) {
+func (s service) commitLabel(path string) (string, error) {
 	output, err := s.runner.CombinedOutput("git", "-C", path, "log", "-1", "--pretty=%s")
 	if err != nil {
 		return "", err
@@ -130,7 +130,7 @@ func (s manager) commitLabel(path string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-func (s manager) hasUncommittedChanges(path string) (bool, error) {
+func (s service) hasUncommittedChanges(path string) (bool, error) {
 	output, err := s.runner.CombinedOutput("git", "-C", path, "status", "--porcelain")
 	if err != nil {
 		return false, err
