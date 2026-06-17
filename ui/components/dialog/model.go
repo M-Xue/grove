@@ -109,17 +109,3 @@ func (m *Model) move(delta int) {
 	}
 	m.focusedID = m.buttons[index].ID
 }
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}

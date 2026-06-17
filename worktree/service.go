@@ -144,17 +144,3 @@ func (s service) hasUncommittedChanges(path string) (bool, error) {
 	}
 	return false, nil
 }
-
-func validateAddInput(path, branch string) (string, string, error) {
-	path = strings.TrimSpace(path)
-	branch = strings.TrimSpace(branch)
-
-	if path == "" {
-		return "", "", ErrWorktreePathRequired
-	}
-	if branch == "" {
-		return "", "", ErrBranchNameRequired
-	}
-
-	return path, branch, nil
-}

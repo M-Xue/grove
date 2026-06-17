@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 const (
@@ -153,27 +152,3 @@ func (m *Model) syncScroll(height int) {
 	m.scroll = max(0, min(m.scroll, maxScroll))
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func fitLine(content string, width int) string {
-	if width <= 0 {
-		return ""
-	}
-	contentWidth := lipgloss.Width(content)
-	if contentWidth > width {
-		return lipgloss.NewStyle().MaxWidth(width).Render(content)
-	}
-	return content + strings.Repeat(" ", width-contentWidth)
-}

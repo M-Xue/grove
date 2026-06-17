@@ -111,8 +111,8 @@ func (s *BranchScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.Stat
 }
 
 func (s *BranchScreen) View(width, height int, state app.State) string {
-	leftWidth := branchMax(20, width/2)
-	rightWidth := branchMax(20, width-leftWidth-3)
+	leftWidth := max(20, width/2)
+	rightWidth := max(20, width-leftWidth-3)
 	header := []string{
 		"grove",
 		"",
@@ -124,7 +124,7 @@ func (s *BranchScreen) View(width, height int, state app.State) string {
 	if warning := branchSwitchWarning(state); warning != "" {
 		header = append(header, warning, "")
 	}
-	listHeight := screenMax(1, branchMin(maxVisibleBranches, height-len(header)))
+	listHeight := max(1, min(maxVisibleBranches, height-len(header)))
 	leftBody := s.list.View(listHeight)
 	rightBody := s.commitsView(rightWidth, listHeight, state)
 	leftLines := strings.Split(leftBody, "\n")
@@ -154,7 +154,7 @@ func (s *BranchScreen) View(width, height int, state app.State) string {
 
 func (s *BranchScreen) Footer(helpWidth int, scope branch.Scope) string {
 	model := NewHelpModel()
-	model.Width = screenMax(helpWidth, 0)
+	model.Width = max(helpWidth, 0)
 	if s.dialogSignature != "" {
 		bindings := s.confirmHandlers.HelpBindings([]keys.Key{keys.KeyEnter, keys.KeyTab, keys.KeyEsc, keys.KeyCtrlC})
 		return model.ShortHelpView(bindings)
@@ -262,7 +262,7 @@ func (s *BranchScreen) commitsView(width, height int, state app.State) string {
 	}
 	for _, commit := range state.Branch.Commits {
 		author := truncateText(commit.Author, 8)
-		subjectWidth := branchMax(8, width-branchMax(0, lipgloss.Width(commit.Hash)+lipgloss.Width(author)+6))
+		subjectWidth := max(8, width-max(0, lipgloss.Width(commit.Hash)+lipgloss.Width(author)+6))
 		subject := truncateText(commit.Subject, subjectWidth)
 		lines = append(lines, fitLine(commit.Hash+"  "+author+"  "+subject, width))
 	}
@@ -282,20 +282,6 @@ func scopeLabel(scope branch.Scope) string {
 		return "remote-tracking"
 	}
 	return "local"
-}
-
-func branchMin(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func branchMax(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 func truncateText(value string, width int) string {

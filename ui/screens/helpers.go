@@ -16,10 +16,10 @@ func overlayDialog(base, overlay string, width, height int) string {
 	overlayHeight := len(overlayLines)
 	overlayWidth := 0
 	for _, line := range overlayLines {
-		overlayWidth = screenMax(overlayWidth, lipgloss.Width(line))
+		overlayWidth = max(overlayWidth, lipgloss.Width(line))
 	}
-	row := screenMax(0, (height-overlayHeight)/2)
-	col := screenMax(0, (width-overlayWidth)/2)
+	row := max(0, (height-overlayHeight)/2)
+	col := max(0, (width-overlayWidth)/2)
 
 	for i, line := range overlayLines {
 		targetRow := row + i
@@ -35,7 +35,7 @@ func overlayDialog(base, overlay string, width, height int) string {
 
 func fitCanvas(content string, width, height int) []string {
 	lines := strings.Split(content, "\n")
-	canvas := make([]string, 0, screenMax(height, 0))
+	canvas := make([]string, 0, max(height, 0))
 	for i := 0; i < height; i++ {
 		line := ""
 		if i < len(lines) {
@@ -61,7 +61,7 @@ func overlayLine(base, overlay string, left, width int) string {
 	if width <= 0 {
 		return ""
 	}
-	left = screenMax(0, left)
+	left = max(0, left)
 	base = fitLine(base, width)
 	overlayWidth := lipgloss.Width(overlay)
 	if overlayWidth <= 0 || left >= width {
@@ -74,11 +74,4 @@ func overlayLine(base, overlay string, left, width int) string {
 	prefix := ansi.Cut(base, 0, left)
 	suffix := ansi.Cut(base, left+overlayWidth, width)
 	return prefix + overlay + suffix
-}
-
-func screenMax(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
