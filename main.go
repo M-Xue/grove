@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/M-Xue/grove/app"
-	branchService "github.com/M-Xue/grove/branch"
+	"github.com/M-Xue/grove/branch"
 	"github.com/M-Xue/grove/cli"
 	"github.com/M-Xue/grove/shellinit"
 	"github.com/M-Xue/grove/ui"
@@ -42,7 +42,7 @@ func main() {
 
 	application := app.New(app.Services{
 		Worktree: worktreeService,
-		Branch:   branchService.NewService(),
+		Branch:   branch.NewService(),
 	}, app.WithInitialScreen(cmd.Screen))
 
 	p := tea.NewProgram(ui.New(application), tea.WithAltScreen())

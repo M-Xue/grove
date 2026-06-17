@@ -1,9 +1,10 @@
 package app
 
 import (
-	branchsvc "github.com/M-Xue/grove/branch"
 	"fmt"
 	"strings"
+
+	"github.com/M-Xue/grove/branch"
 )
 
 func (a *App) DialogChoose(buttonID string) Effect {
@@ -22,15 +23,15 @@ func (a *App) DialogChoose(buttonID string) Effect {
 		return RemoveWorktreeEffect{Path: path}
 	case DialogConfirmCreateBranch:
 		path := a.state.Dialog.Path
-		branch := a.state.Dialog.Branch
+		branchName := a.state.Dialog.Branch
 		a.clearDialog()
 		a.setLoading("creating branch and worktree")
-		return AddWorktreeEffect{Path: path, Branch: branch, CreateBranch: true}
+		return AddWorktreeEffect{Path: path, Branch: branchName, CreateBranch: true}
 	case DialogConfirmDeleteBranch:
-		branch := a.state.Dialog.Branch
+		branchName := a.state.Dialog.Branch
 		a.clearDialog()
 		a.setLoading("deleting branch")
-		return DeleteBranchEffect{Name: branch}
+		return DeleteBranchEffect{Name: branchName}
 	case DialogConfirmDeleteAllBranches:
 		a.clearDialog()
 		a.setLoading("deleting local branches")
@@ -182,9 +183,9 @@ func (a *App) HandleResult(result Result) Effect {
 	}
 }
 
-func hasBranch(branches []branchsvc.Info, name string) bool {
-	for _, branch := range branches {
-		if branch.Name == name {
+func hasBranch(branches []branch.Info, name string) bool {
+	for _, br := range branches {
+		if br.Name == name {
 			return true
 		}
 	}

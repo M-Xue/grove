@@ -1,7 +1,7 @@
 package app
 
 import (
-	branchsvc "github.com/M-Xue/grove/branch"
+	"github.com/M-Xue/grove/branch"
 	"github.com/M-Xue/grove/worktree"
 )
 
@@ -25,7 +25,7 @@ const (
 
 type Services struct {
 	Worktree worktree.Service
-	Branch   branchsvc.Service
+	Branch   branch.Service
 }
 
 type LoadingEntry struct {
@@ -57,15 +57,15 @@ type AddState struct{}
 
 type BranchState struct {
 	SelectedName string
-	Commits      []branchsvc.CommitInfo
+	Commits      []branch.CommitInfo
 }
 
 type State struct {
 	Screen        ScreenID
 	SubmittedPath string
 	Worktrees     []worktree.Info
-	Branches      []branchsvc.Info
-	BranchScope   branchsvc.Scope
+	Branches      []branch.Info
+	BranchScope   branch.Scope
 	Loading       []LoadingEntry
 	Dialog        DialogState
 	Statuses      []StatusEntry

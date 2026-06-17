@@ -1,7 +1,7 @@
 package app
 
 import (
-	branchsvc "github.com/M-Xue/grove/branch"
+	"github.com/M-Xue/grove/branch"
 	"github.com/M-Xue/grove/worktree"
 )
 
@@ -55,14 +55,14 @@ type WorktreesLoadedResult struct {
 }
 
 type BranchesLoadedResult struct {
-	Branches []branchsvc.Info
-	Scope    branchsvc.Scope
+	Branches []branch.Info
+	Scope    branch.Scope
 	Err      error
 }
 
 type BranchCommitsLoadedResult struct {
 	Name    string
-	Commits []branchsvc.CommitInfo
+	Commits []branch.CommitInfo
 	Err     error
 }
 
