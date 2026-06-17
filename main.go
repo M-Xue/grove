@@ -8,6 +8,7 @@ import (
 	"github.com/M-Xue/grove/branch"
 	"github.com/M-Xue/grove/cli"
 	"github.com/M-Xue/grove/command"
+	"github.com/M-Xue/grove/repo"
 	"github.com/M-Xue/grove/shellinit"
 	"github.com/M-Xue/grove/ui"
 	"github.com/M-Xue/grove/worktree"
@@ -36,14 +37,13 @@ func main() {
 	}
 
 	runner := command.New()
-	worktreeService := worktree.NewService(runner)
-	if err := worktreeService.InRepo(); err != nil {
+	if err := repo.EnsureInRepo(runner); err != nil {
 		fmt.Fprintf(os.Stderr, "error running grove: %v\n", err)
 		os.Exit(1)
 	}
 
 	application := app.New(app.Services{
-		Worktree: worktreeService,
+		Worktree: worktree.NewService(runner),
 		Branch:   branch.NewService(runner),
 	}, app.WithInitialScreen(cmd.Screen))
 
