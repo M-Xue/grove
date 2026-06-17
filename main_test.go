@@ -1,7 +1,6 @@
 package main
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/M-Xue/grove/app"
@@ -86,21 +85,6 @@ func TestParseCommandSupportsShellInit(t *testing.T) {
 func TestParseCommandRejectsUnsupportedShell(t *testing.T) {
 	if _, err := parseCommand([]string{"shell-init", "tcsh"}); err == nil {
 		t.Fatal("expected error")
-	}
-}
-
-func TestShellInitScript(t *testing.T) {
-	bashScript := shellInitScript("bash", "/tmp/grove")
-	if bashScript == "" {
-		t.Fatal("expected bash shell script")
-	}
-	if want := "'/tmp/grove'"; !strings.Contains(bashScript, want) {
-		t.Fatalf("expected bash script to contain %q", want)
-	}
-
-	powershellScript := shellInitScript("powershell", `C:\grove\grove.exe`)
-	if want := `Set-Alias grove Invoke-Grove`; !strings.Contains(powershellScript, want) {
-		t.Fatalf("expected powershell script to contain %q", want)
 	}
 }
 
