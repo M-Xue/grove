@@ -69,7 +69,7 @@ func TestListReturnsLocalBranchesOrderedByReflogRecency(t *testing.T) {
 		},
 	}
 
-	service := NewServiceWithRunner(runner)
+	service := NewService(runner)
 	branches, scope, err := service.List()
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
@@ -97,7 +97,7 @@ func TestToggleScopeSwitchesToRemoteTrackingBranches(t *testing.T) {
 		},
 	}
 
-	service := NewServiceWithRunner(runner)
+	service := NewService(runner)
 	if scope := service.ToggleScope(); scope != ScopeRemoteTracking {
 		t.Fatalf("unexpected scope after toggle: %q", scope)
 	}
@@ -124,7 +124,7 @@ func TestCheckoutUsesScopeSpecificGitCommand(t *testing.T) {
 		},
 	}
 
-	service := NewServiceWithRunner(runner)
+	service := NewService(runner)
 	if err := service.Checkout("main"); err != nil {
 		t.Fatalf("Checkout returned error: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestFetchRunsGitFetch(t *testing.T) {
 		},
 	}
 
-	service := NewServiceWithRunner(runner)
+	service := NewService(runner)
 	if err := service.Fetch(); err != nil {
 		t.Fatalf("Fetch returned error: %v", err)
 	}
@@ -167,7 +167,7 @@ func TestRecentCommitsParsesGitLogOutput(t *testing.T) {
 		},
 	}
 
-	service := NewServiceWithRunner(runner)
+	service := NewService(runner)
 	commits, err := service.RecentCommits("feature/a", 10)
 	if err != nil {
 		t.Fatalf("RecentCommits returned error: %v", err)
@@ -188,7 +188,7 @@ func TestDeleteRunsGitBranchDeleteForLocalScope(t *testing.T) {
 		},
 	}
 
-	service := NewServiceWithRunner(runner)
+	service := NewService(runner)
 	if err := service.Delete("feature/a"); err != nil {
 		t.Fatalf("Delete returned error: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestDeleteRunsGitBranchDeleteForLocalScope(t *testing.T) {
 }
 
 func TestDeleteRejectsRemoteTrackingScope(t *testing.T) {
-	service := NewServiceWithRunner(&stubRunner{results: map[string]commandResult{}})
+	service := NewService(&stubRunner{results: map[string]commandResult{}})
 	service.ToggleScope()
 	if err := service.Delete("origin/feature/a"); err == nil {
 		t.Fatal("expected error")
@@ -227,7 +227,7 @@ func TestDeleteAllLocalDeletesDeletableBranchesAndSkipsCheckedOutOnes(t *testing
 		},
 	}
 
-	service := NewServiceWithRunner(runner)
+	service := NewService(runner)
 	summary, err := service.DeleteAllLocal()
 	if err != nil {
 		t.Fatalf("DeleteAllLocal returned error: %v", err)

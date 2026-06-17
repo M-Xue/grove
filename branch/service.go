@@ -2,7 +2,6 @@ package branch
 
 import (
 	"fmt"
-	"os/exec"
 	"sort"
 	"strings"
 )
@@ -50,14 +49,8 @@ type service struct {
 	scope  Scope
 }
 
-func NewService() Service {
-	return &service{runner: commandRunner{}, scope: ScopeLocal}
-}
-
-func NewServiceWithRunner(runner Runner) Service {
-	if runner == nil {
-		return NewService()
-	}
+// NewService returns a branch Service backed by the injected command runner.
+func NewService(runner Runner) Service {
 	return &service{runner: runner, scope: ScopeLocal}
 }
 
@@ -416,19 +409,4 @@ func normalizeBranch(value string) string {
 		return ""
 	}
 	return strings.TrimPrefix(value, "refs/heads/")
-}
-
-type commandRunner struct{}
-
-func (commandRunner) CombinedOutput(name string, args ...string) ([]byte, error) {
-	cmd := exec.Command(name, args...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		message := strings.TrimSpace(string(output))
-		if message == "" {
-			return nil, err
-		}
-		return nil, fmt.Errorf("%w: %s", err, message)
-	}
-	return output, nil
 }
