@@ -128,7 +128,7 @@ func TestManagerAddNewBranchRunsGitWorktreeAddWithBranchCreation(t *testing.T) {
 	}
 	manager := NewServiceWithRunner(runner)
 
-	err := manager.AddNewBranch("../feature-auth", "feature/auth")
+	err := manager.AddWithNewBranch("../feature-auth", "feature/auth")
 	if err != nil {
 		t.Fatalf("AddNewBranch returned error: %v", err)
 	}
@@ -272,7 +272,7 @@ func TestManagerListReturnsStructuredWorktrees(t *testing.T) {
 		t.Fatalf("List returned error: %v", err)
 	}
 
-	want := []WorktreeInfo{
+	want := []Info{
 		{
 			Path:                  "/repo",
 			Branch:                "main",

@@ -50,7 +50,7 @@ type QuitEffect struct{}
 type Result interface{}
 
 type WorktreesLoadedResult struct {
-	Worktrees []worktree.WorktreeInfo
+	Worktrees []worktree.Info
 	Err       error
 }
 

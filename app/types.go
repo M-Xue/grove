@@ -63,7 +63,7 @@ type BranchState struct {
 type State struct {
 	Screen        ScreenID
 	SubmittedPath string
-	Worktrees     []worktree.WorktreeInfo
+	Worktrees     []worktree.Info
 	Branches      []branchsvc.Info
 	BranchScope   branchsvc.Scope
 	Loading       []LoadingEntry
