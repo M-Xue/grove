@@ -6,14 +6,14 @@ func (a *App) OpenAdd() {
 		a.clearDialog()
 	}
 	if len(a.state.Loading) > 0 {
-		a.clearLoading()
+		a.ClearLoading()
 	}
 }
 
 func (a *App) CloseAdd() {
 	a.state.Screen = ScreenChange
 	a.clearDialog()
-	a.clearLoading()
+	a.ClearLoading()
 }
 
 func (a *App) RequestAddWorktree(path, branch string) Command {

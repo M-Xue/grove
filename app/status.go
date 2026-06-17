@@ -16,7 +16,8 @@ type StatusEntry struct {
 	Message string
 }
 
-func (a *App) DismissStatuses() {
+// ClearStatus removes every status notice.
+func (a *App) ClearStatus() {
 	a.state.Statuses = nil
 }
 

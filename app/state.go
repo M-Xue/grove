@@ -40,8 +40,8 @@ func (a *App) clearLoadingEntry(id string) {
 	a.state.Loading = filtered
 }
 
-// clearLoading removes every loading entry. Used on screen transitions.
-func (a *App) clearLoading() {
+// ClearLoading removes every loading entry. Used on screen transitions.
+func (a *App) ClearLoading() {
 	a.state.Loading = nil
 }
 
