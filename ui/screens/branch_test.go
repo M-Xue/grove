@@ -5,13 +5,13 @@ import (
 	"testing"
 
 	"github.com/M-Xue/grove/app"
-	branchsvc "github.com/M-Xue/grove/branch"
+	"github.com/M-Xue/grove/branch"
 	"github.com/M-Xue/grove/worktree"
 )
 
 func TestBranchSwitchWarningShownForDirtyCurrentBranch(t *testing.T) {
 	state := app.State{
-		Branches: []branchsvc.Info{{Name: "feature/a", CheckedOutHere: true}},
+		Branches: []branch.Info{{Name: "feature/a", CheckedOutHere: true}},
 		Worktrees: []worktree.Info{{
 			Branch:                "feature/a",
 			HasUncommittedChanges: true,
@@ -29,7 +29,7 @@ func TestBranchSwitchWarningShownForDirtyCurrentBranch(t *testing.T) {
 
 func TestBranchSwitchWarningHiddenWhenCurrentBranchClean(t *testing.T) {
 	state := app.State{
-		Branches: []branchsvc.Info{{Name: "feature/a", CheckedOutHere: true}},
+		Branches: []branch.Info{{Name: "feature/a", CheckedOutHere: true}},
 		Worktrees: []worktree.Info{{
 			Branch:                "feature/a",
 			HasUncommittedChanges: false,

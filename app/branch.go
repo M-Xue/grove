@@ -46,11 +46,11 @@ func (a *App) RequestDeleteAllBranches() Effect {
 		return nil
 	}
 	branchNames := make([]string, 0, len(a.state.Branches))
-	for _, branch := range a.state.Branches {
-		if branch.Name == "" {
+	for _, br := range a.state.Branches {
+		if br.Name == "" {
 			continue
 		}
-		branchNames = append(branchNames, branch.Name)
+		branchNames = append(branchNames, br.Name)
 	}
 	description := "Delete all local branches except ones currently checked out here or in another worktree?"
 	if len(branchNames) > 0 {

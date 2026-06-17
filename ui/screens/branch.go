@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/M-Xue/grove/app"
-	branchsvc "github.com/M-Xue/grove/branch"
+	"github.com/M-Xue/grove/branch"
 	"github.com/M-Xue/grove/ui/components/dialog"
 	"github.com/M-Xue/grove/ui/components/selectlist"
 	"github.com/M-Xue/grove/ui/components/textinput"
@@ -50,15 +50,15 @@ func (s *BranchScreen) Sync(state app.State) {
 	selectedID, _ := s.list.SelectedID()
 	s.branches = make([]branchItem, 0, len(state.Branches))
 	items := make([]selectlist.Item, 0, len(state.Branches))
-	for _, branch := range state.Branches {
-		label := branch.Name
-		if branch.CheckedOutHere {
+	for _, br := range state.Branches {
+		label := br.Name
+		if br.CheckedOutHere {
 			label += " [current]"
-		} else if branch.CheckedOutElsewhere {
+		} else if br.CheckedOutElsewhere {
 			label += " [worktree]"
 		}
-		items = append(items, selectlist.Item{ID: branch.Name, Label: label})
-		s.branches = append(s.branches, branchItem{id: branch.Name, label: label})
+		items = append(items, selectlist.Item{ID: br.Name, Label: label})
+		s.branches = append(s.branches, branchItem{id: br.Name, label: label})
 	}
 	filtered := filterItems(items, s.search.Value())
 	s.list.SetItems(filtered)
@@ -152,7 +152,7 @@ func (s *BranchScreen) View(width, height int, state app.State) string {
 	return content
 }
 
-func (s *BranchScreen) Footer(helpWidth int, scope branchsvc.Scope) string {
+func (s *BranchScreen) Footer(helpWidth int, scope branch.Scope) string {
 	model := NewHelpModel()
 	model.Width = screenMax(helpWidth, 0)
 	if s.dialogSignature != "" {
@@ -160,7 +160,7 @@ func (s *BranchScreen) Footer(helpWidth int, scope branchsvc.Scope) string {
 		return model.ShortHelpView(bindings)
 	}
 	scopeHelp := "remote"
-	if scope == branchsvc.ScopeRemoteTracking {
+	if scope == branch.ScopeRemoteTracking {
 		scopeHelp = "local"
 	}
 	bindings := s.defaultHandlers.HelpBindings([]keys.Key{keys.KeyEnter, keys.KeyCtrlD, keys.KeyCtrlShiftD, keys.KeyCtrlF, keys.KeyCtrlO, keys.KeyUp, keys.KeyDown, keys.KeyEsc})
@@ -271,14 +271,14 @@ func (s *BranchScreen) commitsView(width, height int, state app.State) string {
 
 func toBranchSelectItems(branches []branchItem) []selectlist.Item {
 	items := make([]selectlist.Item, 0, len(branches))
-	for _, branch := range branches {
-		items = append(items, selectlist.Item{ID: branch.id, Label: branch.label})
+	for _, br := range branches {
+		items = append(items, selectlist.Item{ID: br.id, Label: br.label})
 	}
 	return items
 }
 
-func scopeLabel(scope branchsvc.Scope) string {
-	if scope == branchsvc.ScopeRemoteTracking {
+func scopeLabel(scope branch.Scope) string {
+	if scope == branch.ScopeRemoteTracking {
 		return "remote-tracking"
 	}
 	return "local"
@@ -335,10 +335,10 @@ func branchSwitchWarning(state app.State) string {
 	return ""
 }
 
-func currentBranchName(branches []branchsvc.Info) string {
-	for _, branch := range branches {
-		if branch.CheckedOutHere {
-			return branch.Name
+func currentBranchName(branches []branch.Info) string {
+	for _, br := range branches {
+		if br.CheckedOutHere {
+			return br.Name
 		}
 	}
 	return ""

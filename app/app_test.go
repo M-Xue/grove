@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	branchsvc "github.com/M-Xue/grove/branch"
+	"github.com/M-Xue/grove/branch"
 )
 
 func TestRequestSubmitSelectedPathSetsOutput(t *testing.T) {
@@ -59,7 +59,7 @@ func TestSelectBranchLoadsCommitsForSelection(t *testing.T) {
 
 func TestHandleBranchesLoadedRequestsCommitPreviewForSelection(t *testing.T) {
 	a := New(Services{})
-	effect := a.HandleResult(BranchesLoadedResult{Branches: []branchsvc.Info{{Name: "feature/a"}}})
+	effect := a.HandleResult(BranchesLoadedResult{Branches: []branch.Info{{Name: "feature/a"}}})
 	loadEffect, ok := effect.(LoadBranchCommitsEffect)
 	if !ok {
 		t.Fatalf("expected LoadBranchCommitsEffect, got %#v", effect)
@@ -216,7 +216,7 @@ func TestDialogChooseDeleteBranchReturnsDeleteEffect(t *testing.T) {
 
 func TestRequestDeleteAllBranchesRequiresLocalScope(t *testing.T) {
 	a := New(Services{})
-	a.state.BranchScope = branchsvc.ScopeRemoteTracking
+	a.state.BranchScope = branch.ScopeRemoteTracking
 	if effect := a.RequestDeleteAllBranches(); effect != nil {
 		t.Fatalf("expected nil effect, got %#v", effect)
 	}
@@ -227,7 +227,7 @@ func TestRequestDeleteAllBranchesRequiresLocalScope(t *testing.T) {
 
 func TestRequestDeleteAllBranchesRequiresLoadedBranches(t *testing.T) {
 	a := New(Services{})
-	a.state.BranchScope = branchsvc.ScopeLocal
+	a.state.BranchScope = branch.ScopeLocal
 	if effect := a.RequestDeleteAllBranches(); effect != nil {
 		t.Fatalf("expected nil effect, got %#v", effect)
 	}
@@ -238,8 +238,8 @@ func TestRequestDeleteAllBranchesRequiresLoadedBranches(t *testing.T) {
 
 func TestRequestDeleteAllBranchesOpensConfirmationDialog(t *testing.T) {
 	a := New(Services{})
-	a.state.BranchScope = branchsvc.ScopeLocal
-	a.state.Branches = []branchsvc.Info{{Name: "feature/a"}, {Name: "main"}}
+	a.state.BranchScope = branch.ScopeLocal
+	a.state.Branches = []branch.Info{{Name: "feature/a"}, {Name: "main"}}
 	if effect := a.RequestDeleteAllBranches(); effect != nil {
 		t.Fatalf("expected nil effect, got %#v", effect)
 	}
@@ -257,8 +257,8 @@ func TestRequestDeleteAllBranchesOpensConfirmationDialog(t *testing.T) {
 
 func TestDialogChooseDeleteAllBranchesReturnsDeleteEffect(t *testing.T) {
 	a := New(Services{})
-	a.state.BranchScope = branchsvc.ScopeLocal
-	a.state.Branches = []branchsvc.Info{{Name: "feature/a"}}
+	a.state.BranchScope = branch.ScopeLocal
+	a.state.Branches = []branch.Info{{Name: "feature/a"}}
 	a.RequestDeleteAllBranches()
 	effect := a.DialogChoose("confirm")
 	_, ok := effect.(DeleteAllBranchesEffect)
