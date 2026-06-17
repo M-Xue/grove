@@ -94,7 +94,7 @@ func (s *ChangeScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.Stat
 
 func (s *ChangeScreen) View(width, height int, state app.State) string {
 	header := []string{"grove", "", lipgloss.NewStyle().Bold(true).Render("Change worktree"), "", s.search.View(), ""}
-	body := s.list.View(screenMax(1, height-len(header)))
+	body := s.list.View(max(1, height-len(header)))
 	contentLines := append(header, strings.Split(body, "\n")...)
 	content := strings.Join(contentLines, "\n")
 	if state.Dialog.Active {
@@ -105,14 +105,14 @@ func (s *ChangeScreen) View(width, height int, state app.State) string {
 
 func (s *ChangeScreen) Footer(helpWidth int) string {
 	model := NewHelpModel()
-	model.Width = screenMax(helpWidth, 0)
+	model.Width = max(helpWidth, 0)
 	order := []keys.Key{keys.KeyEnter, keys.KeyCtrlA, keys.KeyCtrlB, keys.KeyCtrlD, keys.KeyUp, keys.KeyDown, keys.KeyEsc}
 	return model.ShortHelpView(s.defaultHandlers.HelpBindings(order))
 }
 
 func (s *ChangeScreen) DialogFooter(helpWidth int) string {
 	model := NewHelpModel()
-	model.Width = screenMax(helpWidth, 0)
+	model.Width = max(helpWidth, 0)
 	order := []keys.Key{keys.KeyEnter, keys.KeyTab, keys.KeyEsc, keys.KeyCtrlC}
 	return model.ShortHelpView(s.confirmHandlers.HelpBindings(order))
 }

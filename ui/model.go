@@ -233,13 +233,6 @@ func (m *Model) runEffect(effect app.Effect) tea.Cmd {
 	}
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 func fitBody(content string, width, height int) []string {
 	lines := strings.Split(content, "\n")
 	result := make([]string, 0, height)

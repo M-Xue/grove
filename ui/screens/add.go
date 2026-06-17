@@ -91,7 +91,7 @@ func (s *AddScreen) View(width, height int, state app.State) string {
 
 func (s *AddScreen) Footer(helpWidth int, dialogActive bool) string {
 	model := NewHelpModel()
-	model.Width = screenMax(helpWidth, 0)
+	model.Width = max(helpWidth, 0)
 	if dialogActive {
 		order := []keys.Key{keys.KeyEnter, keys.KeyTab, keys.KeyEsc, keys.KeyCtrlC}
 		return model.ShortHelpView(s.confirmHandlers.HelpBindings(order))

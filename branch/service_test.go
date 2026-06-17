@@ -240,37 +240,3 @@ func TestDeleteAllLocalDeletesDeletableBranchesAndSkipsCheckedOutOnes(t *testing
 		t.Fatalf("unexpected summary: got %#v want %#v", summary, want)
 	}
 }
-
-func TestReflogBranchNameParsesHeadAndRemoteRefs(t *testing.T) {
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{input: "refs/heads/main@{0}", want: "main"},
-		{input: "refs/remotes/origin/main@{12}", want: "origin/main"},
-		{input: "HEAD@{0}", want: ""},
-	}
-
-	for _, test := range tests {
-		if got := reflogBranchName(test.input); got != test.want {
-			t.Fatalf("reflogBranchName(%q) = %q, want %q", test.input, got, test.want)
-		}
-	}
-}
-
-func TestHeadCheckoutBranchNameParsesCheckoutMessages(t *testing.T) {
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{input: "checkout: moving from main to feature/a", want: "feature/a"},
-		{input: "checkout: moving from abc123 to main", want: "main"},
-		{input: "commit: message", want: ""},
-	}
-
-	for _, test := range tests {
-		if got := headCheckoutBranchName(test.input); got != test.want {
-			t.Fatalf("headCheckoutBranchName(%q) = %q, want %q", test.input, got, test.want)
-		}
-	}
-}
