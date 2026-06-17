@@ -4,11 +4,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/M-Xue/grove/app"
 	branchService "github.com/M-Xue/grove/branch"
+	"github.com/M-Xue/grove/shellinit"
 	"github.com/M-Xue/grove/ui"
 	"github.com/M-Xue/grove/worktree"
 	tea "github.com/charmbracelet/bubbletea"
@@ -26,7 +26,12 @@ func main() {
 			fmt.Fprintf(os.Stderr, "error running grove: %v\n", err)
 			os.Exit(1)
 		}
-		fmt.Print(shellInitScript(cmd.Shell, execPath))
+		script, err := shellinit.Script(cmd.Shell, execPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error running grove: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Print(script)
 		return
 	}
 
@@ -85,7 +90,7 @@ func parseCommand(args []string) (command, error) {
 		if len(args) > 2 {
 			return command{}, fmt.Errorf("unexpected arguments: %s", strings.Join(args[2:], " "))
 		}
-		if !isSupportedShell(shell) {
+		if !shellinit.IsSupported(shell) {
 			return command{}, fmt.Errorf("unsupported shell %q", shell)
 		}
 		return command{Kind: commandShellInit, Shell: shell}, nil
@@ -123,55 +128,4 @@ func parseInitialScreen(args []string) (app.ScreenID, error) {
 		return "", fmt.Errorf("unexpected arguments: %s", fs.Args())
 	}
 	return selected, nil
-}
-
-func isSupportedShell(shell string) bool {
-	switch shell {
-	case "bash", "zsh", "powershell":
-		return true
-	default:
-		return false
-	}
-}
-
-func shellInitScript(shell, binaryPath string) string {
-	quotedPath := shellQuote(binaryPath)
-	switch shell {
-	case "powershell":
-		return fmt.Sprintf(`function Invoke-Grove {
-    param(
-        [Parameter(ValueFromRemainingArguments = $true)]
-        [string[]]$Arguments
-    )
-
-    $output = & "%s" @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        return $LASTEXITCODE
-    }
-
-    if (-not [string]::IsNullOrWhiteSpace($output)) {
-        Set-Location $output
-    }
-}
-
-Set-Alias grove Invoke-Grove
-`, filepath.Clean(binaryPath))
-	default:
-		return fmt.Sprintf(`grove() {
-		local output
-		output="$(%s "$@")"
-		local status=$?
-		if [ $status -ne 0 ]; then
-			return $status
-		fi
-		if [ -n "$output" ]; then
-			cd "$output" || return 1
-		fi
-	}
-	`, quotedPath)
-	}
-}
-
-func shellQuote(path string) string {
-	return "'" + strings.ReplaceAll(path, "'", "'\\''") + "'"
 }
