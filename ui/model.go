@@ -66,7 +66,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		m.app.DismissCompletedLoading()
 		if len(m.app.State().Statuses) > 0 {
-			m.app.DismissStatuses()
+			m.app.ClearStatus()
 		}
 		m.syncScreens()
 		ctx := &screens.ScreenContext{App: m.app, Run: m.run, Quit: func() tea.Cmd { return tea.Quit }}
@@ -92,9 +92,9 @@ func (m *Model) View() string {
 	m.syncScreens()
 	contentWidth := max(0, m.width-horizontalPadding*2)
 	footer := m.footer(contentWidth, state)
-	loadingLines := m.loading.View(state.Loading, contentWidth)
-	statusLines := m.status.View(state.Statuses, contentWidth)
-	noticeLines := expandRenderedLines(append(append([]string(nil), loadingLines...), statusLines...))
+	statusLines := expandRenderedLines(m.status.View(state.Statuses, contentWidth))
+	loadingLines := expandRenderedLines(m.loading.View(state.Loading, contentWidth))
+	noticeLines := composeNotices(statusLines, loadingLines, contentWidth)
 	contentHeight := max(0, m.height-verticalPadding*2)
 	bodyHeight := max(0, contentHeight-2)
 		var body string
@@ -228,6 +228,53 @@ func expandRenderedLines(lines []string) []string {
 		expanded = append(expanded, parts...)
 	}
 	return expanded
+}
+
+// composeNotices lays status messages along the left and loading messages along
+// the right of the same bottom band, each column bottom-aligned so both grow
+// upward from the footer.
+func composeNotices(statusLines, loadingLines []string, width int) []string {
+	height := max(len(statusLines), len(loadingLines))
+	if height == 0 {
+		return nil
+	}
+	statusOffset := height - len(statusLines)
+	loadingOffset := height - len(loadingLines)
+	rows := make([]string, 0, height)
+	for i := 0; i < height; i++ {
+		left := ""
+		if i-statusOffset >= 0 {
+			left = statusLines[i-statusOffset]
+		}
+		right := ""
+		if i-loadingOffset >= 0 {
+			right = loadingLines[i-loadingOffset]
+		}
+		rows = append(rows, placeLeftRight(left, right, width))
+	}
+	return rows
+}
+
+// placeLeftRight renders left flush-left and right flush against the right edge
+// of width, padding the gap between them. If they would collide, the left text
+// is truncated so the right text stays fully visible.
+func placeLeftRight(left, right string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	rightWidth := lipgloss.Width(right)
+	if rightWidth >= width {
+		return lipgloss.NewStyle().MaxWidth(width).Render(right)
+	}
+	leftMax := width - rightWidth
+	if lipgloss.Width(left) > leftMax {
+		left = lipgloss.NewStyle().MaxWidth(leftMax).Render(left)
+	}
+	gap := width - lipgloss.Width(left) - rightWidth
+	if gap < 0 {
+		gap = 0
+	}
+	return left + strings.Repeat(" ", gap) + right
 }
 
 func (m *Model) footer(contentWidth int, state app.State) string {

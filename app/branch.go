@@ -8,7 +8,7 @@ func (a *App) OpenBranch() Command {
 	a.state.Screen = ScreenBranch
 	a.clearDialog()
 	if len(a.state.Loading) > 0 {
-		a.clearLoading()
+		a.ClearLoading()
 	}
 	return a.loadBranches()
 }
@@ -16,7 +16,7 @@ func (a *App) OpenBranch() Command {
 func (a *App) CloseBranch() Command {
 	a.state.Screen = ScreenChange
 	a.clearDialog()
-	a.clearLoading()
+	a.ClearLoading()
 	return a.loadWorktrees()
 }
 
