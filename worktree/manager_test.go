@@ -54,7 +54,7 @@ func TestManagerAddRunsGitWorktreeAdd(t *testing.T) {
 			commandKey("git", "worktree", "add", "../feature-auth", "feature/auth"): {},
 		},
 	}
-	manager := NewServiceWithRunner(runner)
+	manager := NewService(runner)
 
 	err := manager.Add("../feature-auth", "feature/auth")
 	if err != nil {
@@ -73,7 +73,7 @@ func TestManagerAddRunsGitWorktreeAdd(t *testing.T) {
 
 func TestManagerAddRequiresPath(t *testing.T) {
 	runner := &stubRunner{}
-	manager := NewServiceWithRunner(runner)
+	manager := NewService(runner)
 
 	err := manager.Add("   ", "feature/auth")
 	if err == nil {
@@ -89,7 +89,7 @@ func TestManagerAddRequiresPath(t *testing.T) {
 
 func TestManagerAddRequiresBranch(t *testing.T) {
 	runner := &stubRunner{}
-	manager := NewServiceWithRunner(runner)
+	manager := NewService(runner)
 
 	err := manager.Add("../feature-auth", " ")
 	if err == nil {
@@ -109,7 +109,7 @@ func TestManagerAddReturnsRunnerError(t *testing.T) {
 			commandKey("git", "worktree", "add", "../feature-auth", "feature/auth"): {err: errors.New("git failed")},
 		},
 	}
-	manager := NewServiceWithRunner(runner)
+	manager := NewService(runner)
 
 	err := manager.Add("../feature-auth", "feature/auth")
 	if err == nil {
@@ -126,7 +126,7 @@ func TestManagerAddNewBranchRunsGitWorktreeAddWithBranchCreation(t *testing.T) {
 			commandKey("git", "worktree", "add", "-b", "feature/auth", "../feature-auth"): {},
 		},
 	}
-	manager := NewServiceWithRunner(runner)
+	manager := NewService(runner)
 
 	err := manager.AddWithNewBranch("../feature-auth", "feature/auth")
 	if err != nil {
@@ -145,7 +145,7 @@ func TestManagerRemoveRunsGitWorktreeRemove(t *testing.T) {
 			commandKey("git", "worktree", "remove", "../feature-auth"): {},
 		},
 	}
-	manager := NewServiceWithRunner(runner)
+	manager := NewService(runner)
 
 	err := manager.Remove("../feature-auth")
 	if err != nil {
@@ -160,7 +160,7 @@ func TestManagerRemoveRunsGitWorktreeRemove(t *testing.T) {
 
 func TestManagerRemoveRequiresPath(t *testing.T) {
 	runner := &stubRunner{}
-	manager := NewServiceWithRunner(runner)
+	manager := NewService(runner)
 
 	err := manager.Remove(" ")
 	if err == nil {
@@ -180,7 +180,7 @@ func TestManagerRemoveReturnsRunnerError(t *testing.T) {
 			commandKey("git", "worktree", "remove", "../feature-auth"): {err: errors.New("git failed")},
 		},
 	}
-	manager := NewServiceWithRunner(runner)
+	manager := NewService(runner)
 
 	err := manager.Remove("../feature-auth")
 	if err == nil {
@@ -199,7 +199,7 @@ func TestManagerBranchExistsReturnsTrueForExistingBranch(t *testing.T) {
 			},
 		},
 	}
-	manager := NewServiceWithRunner(runner)
+	manager := NewService(runner)
 
 	exists, err := manager.BranchExists("feature/auth")
 	if err != nil {
@@ -218,7 +218,7 @@ func TestManagerBranchExistsReturnsFalseForMissingBranch(t *testing.T) {
 			},
 		},
 	}
-	manager := NewServiceWithRunner(runner)
+	manager := NewService(runner)
 
 	exists, err := manager.BranchExists("feature/auth")
 	if err != nil {
@@ -231,7 +231,7 @@ func TestManagerBranchExistsReturnsFalseForMissingBranch(t *testing.T) {
 
 func TestManagerBranchExistsRequiresBranch(t *testing.T) {
 	runner := &stubRunner{}
-	manager := NewServiceWithRunner(runner)
+	manager := NewService(runner)
 
 	_, err := manager.BranchExists(" ")
 	if err == nil {
@@ -266,7 +266,7 @@ func TestManagerListReturnsStructuredWorktrees(t *testing.T) {
 		},
 	}
 
-	manager := NewServiceWithRunner(runner)
+	manager := NewService(runner)
 	got, err := manager.List()
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
@@ -309,7 +309,7 @@ func TestManagerListSupportsDetachedHead(t *testing.T) {
 		},
 	}
 
-	manager := NewServiceWithRunner(runner)
+	manager := NewService(runner)
 	got, err := manager.List()
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
@@ -338,7 +338,7 @@ func TestManagerListIgnoresUntrackedFilesForDirtyState(t *testing.T) {
 		},
 	}
 
-	manager := NewServiceWithRunner(runner)
+	manager := NewService(runner)
 	got, err := manager.List()
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)

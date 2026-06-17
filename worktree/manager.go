@@ -36,14 +36,8 @@ type manager struct {
 	runner Runner
 }
 
-func NewService() Service {
-	return manager{runner: commandRunner{}}
-}
-
-func NewServiceWithRunner(runner Runner) Service {
-	if runner == nil {
-		return NewService()
-	}
+// NewService returns a worktree Service backed by the injected command runner.
+func NewService(runner Runner) Service {
 	return manager{runner: runner}
 }
 
