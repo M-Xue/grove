@@ -124,11 +124,11 @@ func (a *App) removeWorktree(path string) Command {
 	}
 }
 
-func (a *App) pruneWorktree(path string) Command {
-	id := a.setLoading("pruning worktree")
+func (a *App) pruneWorktrees() Command {
+	id := a.setLoading("pruning stale worktrees")
 	worktrees := a.services.Worktree
 	return func() Message {
-		err := worktrees.Prune(path)
-		return WorktreePrunedMessage{LoadingID: id, Path: path, Err: err}
+		err := worktrees.Prune()
+		return WorktreesPrunedMessage{LoadingID: id, Err: err}
 	}
 }

@@ -17,7 +17,7 @@ type changeApp interface {
 	OpenAdd()
 	OpenBranch() app.Command
 	RemoveWorktree(path string) app.Command
-	PruneWorktree(path string) app.Command
+	PruneWorktrees() app.Command
 	Quit() app.Command
 }
 
@@ -159,26 +159,20 @@ func (s *ChangeScreen) actionStartRemove(actx *ActionCtx) app.Command {
 }
 
 func (s *ChangeScreen) actionStartPrune(actx *ActionCtx) app.Command {
-	item, ok := s.list.SelectedItem()
-	if !ok {
-		return s.app.PruneWorktree("")
+	if !s.hasStale() {
+		// Nothing to prune; the app reports the no-op without a dialog.
+		return s.app.PruneWorktrees()
 	}
-	path := item.ID
-	if !s.isStale(path) {
-		// Pruning force-removes the worktree, so only stale entries get the
-		// confirm dialog; the app reports the no-op for anything else.
-		return s.app.PruneWorktree(path)
-	}
-	s.confirm.open("Prune stale worktree?", path, "Prune", false, func(actx *ActionCtx) app.Command {
-		return s.app.PruneWorktree(path)
+	s.confirm.open("Prune all stale worktrees?", "", "Prune", false, func(actx *ActionCtx) app.Command {
+		return s.app.PruneWorktrees()
 	})
 	return nil
 }
 
-func (s *ChangeScreen) isStale(path string) bool {
+func (s *ChangeScreen) hasStale() bool {
 	for _, worktree := range s.worktrees {
-		if worktree.id == path {
-			return worktree.stale
+		if worktree.stale {
+			return true
 		}
 	}
 	return false

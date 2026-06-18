@@ -19,26 +19,20 @@ func (a *App) RemoveWorktree(path string) Command {
 	return a.removeWorktree(path)
 }
 
-// PruneWorktree force-removes the stale worktree at path. An empty path reports
-// "no worktree selected"; a path that is not stale reports "worktree is not
-// stale". Either case does nothing, guarding a healthy worktree from a forced
-// removal.
-func (a *App) PruneWorktree(path string) Command {
-	if path == "" {
-		a.appendStatus(StatusInfo, "no worktree selected")
+// PruneWorktrees removes every stale worktree via git's global prune. When no
+// worktree is stale it reports "no stale worktrees" and does nothing.
+func (a *App) PruneWorktrees() Command {
+	if !a.hasStaleWorktree() {
+		a.appendStatus(StatusInfo, "no stale worktrees")
 		return nil
 	}
-	if !a.isStaleWorktree(path) {
-		a.appendStatus(StatusInfo, "worktree is not stale")
-		return nil
-	}
-	return a.pruneWorktree(path)
+	return a.pruneWorktrees()
 }
 
-func (a *App) isStaleWorktree(path string) bool {
+func (a *App) hasStaleWorktree() bool {
 	for _, worktree := range a.state.Worktrees {
-		if worktree.Path == path {
-			return worktree.Stale
+		if worktree.Stale {
+			return true
 		}
 	}
 	return false

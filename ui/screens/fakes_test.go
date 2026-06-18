@@ -10,7 +10,7 @@ func (fakeApp) RequestSubmitSelectedPath(string) app.Command    { return nil }
 func (fakeApp) OpenAdd()                                        {}
 func (fakeApp) OpenBranch() app.Command                         { return nil }
 func (fakeApp) RemoveWorktree(string) app.Command               { return nil }
-func (fakeApp) PruneWorktree(string) app.Command                { return nil }
+func (fakeApp) PruneWorktrees() app.Command                     { return nil }
 func (fakeApp) Quit() app.Command                               { return nil }
 func (fakeApp) RequestAddWorktree(string, string) app.Command   { return nil }
 func (fakeApp) CloseAdd()                                       {}
