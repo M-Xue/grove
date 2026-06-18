@@ -16,6 +16,9 @@ type Info struct {
 	CommitLabel           string
 	CommitHash            string
 	HasUncommittedChanges bool
+	// Stale reports that git considers the worktree prunable, typically
+	// because its working directory no longer exists on disk.
+	Stale bool
 }
 
 type Runner interface {
@@ -28,6 +31,7 @@ type Service interface {
 	BranchExists(branch string) (bool, error)
 	List() ([]Info, error)
 	Remove(path string) error
+	Prune(path string) error
 }
 
 type service struct {
@@ -69,6 +73,19 @@ func (s service) Remove(path string) error {
 	return err
 }
 
+// Prune removes a stale worktree's administrative files. It force-removes the
+// entry so a worktree whose working directory has already been deleted is
+// cleaned up rather than rejected for failing validation.
+func (s service) Prune(path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ErrWorktreePathRequired
+	}
+
+	_, err := s.runner.CombinedOutput("git", "worktree", "remove", "--force", path)
+	return err
+}
+
 func (s service) BranchExists(branch string) (bool, error) {
 	branch = strings.TrimSpace(branch)
 	if branch == "" {
@@ -100,6 +117,19 @@ func (s service) List() ([]Info, error) {
 
 	worktrees := make([]Info, 0, len(entries))
 	for _, entry := range entries {
+		// Stale worktrees no longer have a working directory on disk, so
+		// running git inside their path would fail. Skip those lookups and
+		// surface the worktree as stale instead of aborting the whole list.
+		if entry.prunable {
+			worktrees = append(worktrees, Info{
+				Path:       entry.path,
+				Branch:     normalizeBranch(entry.branch),
+				CommitHash: entry.commitHash,
+				Stale:      true,
+			})
+			continue
+		}
+
 		commitLabel, err := s.commitLabel(entry.path)
 		if err != nil {
 			return nil, err

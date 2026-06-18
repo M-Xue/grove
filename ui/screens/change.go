@@ -17,6 +17,7 @@ type changeApp interface {
 	OpenAdd()
 	OpenBranch() app.Command
 	RemoveWorktree(path string) app.Command
+	PruneWorktree(path string) app.Command
 	Quit() app.Command
 }
 
@@ -29,9 +30,14 @@ type ChangeScreen struct {
 	worktrees []appWorktree
 }
 
+// staleColor is the ANSI escape used to dim stale worktrees in the list.
+const staleColor = "\x1b[38;5;244m"
+
 type appWorktree struct {
 	id    string
 	label string
+	color string
+	stale bool
 }
 
 func NewChangeScreen(application changeApp) *ChangeScreen {
@@ -50,8 +56,13 @@ func (s *ChangeScreen) Sync(state app.State) {
 	items := make([]selectlist.Item, 0, len(state.Worktrees))
 	for _, worktree := range state.Worktrees {
 		label := worktree.Path + " [" + worktree.Branch + "]"
-		items = append(items, selectlist.Item{ID: worktree.Path, Label: label})
-		s.worktrees = append(s.worktrees, appWorktree{id: worktree.Path, label: label})
+		color := ""
+		if worktree.Stale {
+			label += " [stale]"
+			color = staleColor
+		}
+		items = append(items, selectlist.Item{ID: worktree.Path, Label: label, Color: color})
+		s.worktrees = append(s.worktrees, appWorktree{id: worktree.Path, label: label, color: color, stale: worktree.Stale})
 	}
 	items = filterItems(items, s.search.Value())
 	s.list.SetItems(items)
@@ -104,6 +115,7 @@ func (s *ChangeScreen) buildRegistry() Registry {
 			Binding{Keys: []keys.Key{keys.KeyCtrlA}, Symbol: "ctrl+a", Label: "add", Action: s.actionOpenAdd},
 			Binding{Keys: []keys.Key{keys.KeyCtrlB}, Symbol: "ctrl+b", Label: "branches", Action: s.actionOpenBranches},
 			Binding{Keys: []keys.Key{keys.KeyCtrlD}, Symbol: "ctrl+d", Label: "remove", Action: s.actionStartRemove},
+			Binding{Keys: []keys.Key{keys.KeyCtrlP}, Symbol: "ctrl+p", Label: "prune", Action: s.actionStartPrune},
 			Binding{Keys: []keys.Key{keys.KeyUp, keys.KeyShiftTab}, Symbol: "↑/shift+tab", Label: "move", Action: s.actionMoveSelection},
 			Binding{Keys: []keys.Key{keys.KeyDown, keys.KeyTab}, Symbol: "↓/tab", Label: "move", Action: s.actionMoveSelection},
 			Binding{Keys: []keys.Key{keys.KeyEsc, keys.KeyCtrlC}, Symbol: "esc", Label: "quit", Action: s.actionQuit},
@@ -144,6 +156,32 @@ func (s *ChangeScreen) actionStartRemove(actx *ActionCtx) app.Command {
 		return s.app.RemoveWorktree(path)
 	})
 	return nil
+}
+
+func (s *ChangeScreen) actionStartPrune(actx *ActionCtx) app.Command {
+	item, ok := s.list.SelectedItem()
+	if !ok {
+		return s.app.PruneWorktree("")
+	}
+	path := item.ID
+	if !s.isStale(path) {
+		// Pruning force-removes the worktree, so only stale entries get the
+		// confirm dialog; the app reports the no-op for anything else.
+		return s.app.PruneWorktree(path)
+	}
+	s.confirm.open("Prune stale worktree?", path, "Prune", false, func(actx *ActionCtx) app.Command {
+		return s.app.PruneWorktree(path)
+	})
+	return nil
+}
+
+func (s *ChangeScreen) isStale(path string) bool {
+	for _, worktree := range s.worktrees {
+		if worktree.id == path {
+			return worktree.stale
+		}
+	}
+	return false
 }
 
 func (s *ChangeScreen) actionMoveSelection(actx *ActionCtx) app.Command {
@@ -193,7 +231,7 @@ func filterItems(items []selectlist.Item, query string) []selectlist.Item {
 func toItems(worktrees []appWorktree) []selectlist.Item {
 	items := make([]selectlist.Item, 0, len(worktrees))
 	for _, worktree := range worktrees {
-		items = append(items, selectlist.Item{ID: worktree.id, Label: worktree.label})
+		items = append(items, selectlist.Item{ID: worktree.id, Label: worktree.label, Color: worktree.color})
 	}
 	return items
 }

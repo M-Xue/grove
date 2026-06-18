@@ -9,6 +9,7 @@ type listEntry struct {
 	path       string
 	branch     string
 	commitHash string
+	prunable   bool
 }
 
 func parseWorktreeList(output []byte) ([]listEntry, error) {
@@ -42,6 +43,8 @@ func parseWorktreeBlock(block string) (listEntry, error) {
 			entry.commitHash = strings.TrimSpace(strings.TrimPrefix(line, "HEAD "))
 		case strings.HasPrefix(line, "branch "):
 			entry.branch = strings.TrimSpace(strings.TrimPrefix(line, "branch "))
+		case line == "prunable" || strings.HasPrefix(line, "prunable "):
+			entry.prunable = true
 		}
 	}
 

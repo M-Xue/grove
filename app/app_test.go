@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/M-Xue/grove/branch"
+	"github.com/M-Xue/grove/worktree"
 )
 
 func TestRequestSubmitSelectedPathRequestsQuit(t *testing.T) {
@@ -126,6 +127,39 @@ func TestRemoveWorktreeReturnsCommand(t *testing.T) {
 	}
 	if len(a.State().Loading) != 1 || a.State().Loading[0].Message != "removing worktree" {
 		t.Fatalf("expected remove-worktree loading entry, got %#v", a.State().Loading)
+	}
+}
+
+func TestPruneWorktreeRequiresSelection(t *testing.T) {
+	a := New(Services{})
+	if cmd := a.PruneWorktree(""); cmd != nil {
+		t.Fatalf("expected nil command, got %#v", cmd)
+	}
+	if len(a.State().Statuses) != 1 {
+		t.Fatalf("expected one status, got %d", len(a.State().Statuses))
+	}
+}
+
+func TestPruneWorktreeRejectsNonStaleWorktree(t *testing.T) {
+	a := New(Services{})
+	a.HandleMessage(WorktreesLoadedMessage{Worktrees: []worktree.Info{{Path: "/repo", Stale: false}}})
+	if cmd := a.PruneWorktree("/repo"); cmd != nil {
+		t.Fatalf("expected nil command for non-stale worktree, got %#v", cmd)
+	}
+	if len(a.State().Loading) != 0 {
+		t.Fatalf("expected no loading entry, got %#v", a.State().Loading)
+	}
+}
+
+func TestPruneWorktreeReturnsCommandForStaleWorktree(t *testing.T) {
+	a := New(Services{})
+	a.HandleMessage(WorktreesLoadedMessage{Worktrees: []worktree.Info{{Path: "/repo-gone", Stale: true}}})
+	cmd := a.PruneWorktree("/repo-gone")
+	if cmd == nil {
+		t.Fatal("expected a prune command")
+	}
+	if len(a.State().Loading) != 1 || a.State().Loading[0].Message != "pruning worktree" {
+		t.Fatalf("expected prune-worktree loading entry, got %#v", a.State().Loading)
 	}
 }
 
