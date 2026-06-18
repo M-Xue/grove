@@ -9,15 +9,16 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// ScreenContext is the per-keypress context the model hands to a screen.
+// ScreenContext is the per-keypress context the model hands to a screen. It
+// carries only the bridge that runs an app.Command; each screen reaches app
+// through its own narrow interface (injected at construction), never the
+// concrete *app.App.
 type ScreenContext struct {
-	App *app.App
 	Run func(app.Command) tea.Cmd
 }
 
 // ActionCtx is the context handed to a single Action when its key fires.
 type ActionCtx struct {
-	App *app.App
 	Key tea.KeyMsg
 }
 

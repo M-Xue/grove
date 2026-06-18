@@ -11,7 +11,17 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// changeApp is the narrow view of app the change screen depends on.
+type changeApp interface {
+	RequestSubmitSelectedPath(path string) app.Command
+	OpenAdd()
+	OpenBranch() app.Command
+	RemoveWorktree(path string) app.Command
+	Quit() app.Command
+}
+
 type ChangeScreen struct {
+	app       changeApp
 	confirm   confirmDialog
 	search    textinput.Model
 	list      selectlist.Model
@@ -24,8 +34,9 @@ type appWorktree struct {
 	label string
 }
 
-func NewChangeScreen() *ChangeScreen {
+func NewChangeScreen(application changeApp) *ChangeScreen {
 	s := &ChangeScreen{
+		app:    application,
 		search: textinput.New("Search worktree paths"),
 		list:   selectlist.New("No matches"),
 	}
@@ -60,7 +71,7 @@ func (s *ChangeScreen) activeMode() Mode {
 func (s *ChangeScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.State) tea.Cmd {
 	mode := s.activeMode()
 	if binding, ok := s.registry[mode].lookup(keys.Normalize(msg)); ok {
-		return ctx.Run(binding.Action(&ActionCtx{App: ctx.App, Key: msg}))
+		return ctx.Run(binding.Action(&ActionCtx{Key: msg}))
 	}
 	if mode == ModeDefault {
 		if consumed, cmd := s.search.Update(msg); consumed {
@@ -109,28 +120,28 @@ func (s *ChangeScreen) buildRegistry() Registry {
 func (s *ChangeScreen) actionSubmit(actx *ActionCtx) app.Command {
 	item, ok := s.list.SelectedItem()
 	if !ok {
-		return actx.App.RequestSubmitSelectedPath("")
+		return s.app.RequestSubmitSelectedPath("")
 	}
-	return actx.App.RequestSubmitSelectedPath(item.ID)
+	return s.app.RequestSubmitSelectedPath(item.ID)
 }
 
 func (s *ChangeScreen) actionOpenAdd(actx *ActionCtx) app.Command {
-	actx.App.OpenAdd()
+	s.app.OpenAdd()
 	return nil
 }
 
 func (s *ChangeScreen) actionOpenBranches(actx *ActionCtx) app.Command {
-	return actx.App.OpenBranch()
+	return s.app.OpenBranch()
 }
 
 func (s *ChangeScreen) actionStartRemove(actx *ActionCtx) app.Command {
 	item, ok := s.list.SelectedItem()
 	if !ok {
-		return actx.App.RemoveWorktree("")
+		return s.app.RemoveWorktree("")
 	}
 	path := item.ID
 	s.confirm.open("Delete worktree?", path, "Delete", false, func(actx *ActionCtx) app.Command {
-		return actx.App.RemoveWorktree(path)
+		return s.app.RemoveWorktree(path)
 	})
 	return nil
 }
@@ -141,7 +152,7 @@ func (s *ChangeScreen) actionMoveSelection(actx *ActionCtx) app.Command {
 }
 
 func (s *ChangeScreen) actionQuit(actx *ActionCtx) app.Command {
-	return actx.App.Quit()
+	return s.app.Quit()
 }
 
 func (s *ChangeScreen) actionConfirmDialog(actx *ActionCtx) app.Command {

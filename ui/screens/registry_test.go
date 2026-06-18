@@ -35,7 +35,7 @@ func TestModeFooterDerivesFromBindingsAndSkipsEmptyLabels(t *testing.T) {
 }
 
 func TestActiveModeSwitchesWithDialog(t *testing.T) {
-	s := NewChangeScreen()
+	s := NewChangeScreen(fakeApp{})
 	if s.activeMode() != ModeDefault {
 		t.Fatal("expected ModeDefault initially")
 	}
