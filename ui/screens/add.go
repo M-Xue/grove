@@ -1,132 +1,121 @@
 package screens
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/M-Xue/grove/app"
-	"github.com/M-Xue/grove/ui/components/dialog"
 	"github.com/M-Xue/grove/ui/components/textinput"
 	"github.com/M-Xue/grove/ui/keys"
-	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 type AddScreen struct {
-	dialog          dialog.Model
-	path            textinput.Model
-	branch          textinput.Model
-	focusedPath     bool
-	defaultHandlers BindingSet
-	confirmHandlers BindingSet
-	dialogSignature string
+	confirm     confirmDialog
+	path        textinput.Model
+	branch      textinput.Model
+	focusedPath bool
+	registry    Registry
 }
 
 func NewAddScreen() *AddScreen {
 	s := &AddScreen{
-		dialog:      dialog.New(),
 		path:        textinput.New("Relative path"),
 		branch:      textinput.New("Branch name"),
 		focusedPath: true,
 	}
 	s.path.Focus()
-	s.initHandlers()
+	s.registry = s.buildRegistry()
 	return s
 }
 
-func (s *AddScreen) Sync(state app.State) {
-	if state.Dialog.Active {
-		signature := addDialogSignature(state.Dialog)
-		if signature != s.dialogSignature {
-			s.dialog.SetTitle(state.Dialog.Title)
-			s.dialog.SetDescription(state.Dialog.Description)
-			buttons := make([]dialog.Button, 0, len(state.Dialog.Buttons))
-			for _, button := range state.Dialog.Buttons {
-				buttons = append(buttons, dialog.Button{ID: button.ID, Label: button.Label})
-			}
-			s.dialog.SetButtons(buttons)
-			s.dialog.SetFocusedID(state.Dialog.FocusedID)
-			s.dialogSignature = signature
-		}
-	} else {
-		s.dialogSignature = ""
+func (s *AddScreen) Sync(state app.State) {}
+
+// OnMessage reacts to the semantic outcome of checking a branch: when the
+// branch is absent, it opens a screen-owned dialog offering to create it.
+func (s *AddScreen) OnMessage(ctx *ScreenContext, msg app.Message) tea.Cmd {
+	absent, ok := msg.(app.BranchAbsentMessage)
+	if !ok {
+		return nil
 	}
+	path, branchName := absent.Path, absent.Branch
+	s.confirm.open(
+		"Branch does not exist",
+		fmt.Sprintf("Create a new branch named %q?", branchName),
+		"Create",
+		true,
+		func(actx *ActionCtx) app.Command {
+			return actx.App.CreateBranchWorktree(path, branchName)
+		},
+	)
+	return nil
+}
+
+func (s *AddScreen) activeMode() Mode {
+	if s.confirm.active {
+		return ModeDialog
+	}
+	return ModeDefault
 }
 
 func (s *AddScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.State) tea.Cmd {
-	if state.Dialog.Active {
-		if consumed, cmd := s.dialog.Update(msg); consumed {
+	mode := s.activeMode()
+	if binding, ok := s.registry[mode].lookup(keys.Normalize(msg)); ok {
+		return ctx.Run(binding.Action(&ActionCtx{App: ctx.App, Key: msg}))
+	}
+	if mode == ModeDefault {
+		active := &s.path
+		other := &s.branch
+		if !s.focusedPath {
+			active = &s.branch
+			other = &s.path
+		}
+		if consumed, cmd := active.Update(msg); consumed {
 			return cmd
 		}
-		if handler, ok := s.confirmHandlers.HandlerFor(keys.Normalize(msg)); ok && handler != nil {
-			return handler(ctx, msg)
-		}
-		return nil
+		other.Blur()
+		active.Focus()
 	}
-	active := &s.path
-	other := &s.branch
-	if !s.focusedPath {
-		active = &s.branch
-		other = &s.path
-	}
-	if consumed, cmd := active.Update(msg); consumed {
-		return cmd
-	}
-	if handler, ok := s.defaultHandlers.HandlerFor(keys.Normalize(msg)); ok && handler != nil {
-		return handler(ctx, msg)
-	}
-	other.Blur()
-	active.Focus()
 	return nil
 }
 
 func (s *AddScreen) View(width, height int, state app.State) string {
 	header := []string{"grove", "", lipgloss.NewStyle().Bold(true).Render("Add worktree"), "", s.path.View(), s.branch.View()}
 	content := strings.Join(header, "\n")
-	if state.Dialog.Active {
-		return overlayDialog(content, s.dialog.View(width, height), width, height)
+	if s.confirm.active {
+		return overlayDialog(content, s.confirm.view(width, height), width, height)
 	}
 	return content
 }
 
-func (s *AddScreen) Footer(helpWidth int, dialogActive bool) string {
-	model := NewHelpModel()
-	model.Width = max(helpWidth, 0)
-	if dialogActive {
-		order := []keys.Key{keys.KeyEnter, keys.KeyTab, keys.KeyEsc, keys.KeyCtrlC}
-		return model.ShortHelpView(s.confirmHandlers.HelpBindings(order))
-	}
-	order := []keys.Key{keys.KeyEnter, keys.KeyTab, keys.KeyEsc, keys.KeyCtrlC}
-	return model.ShortHelpView(s.defaultHandlers.HelpBindings(order))
+func (s *AddScreen) Footer(helpWidth int) string {
+	return s.registry[s.activeMode()].footer(helpWidth)
 }
 
-func (s *AddScreen) initHandlers() {
-	s.defaultHandlers = BindingSet{
-		keys.KeyEnter:    {Key: keys.KeyEnter, Handler: s.handleSubmit, Help: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "submit"))},
-		keys.KeyEsc:      {Key: keys.KeyEsc, Handler: s.handleClose, Help: key.NewBinding(key.WithKeys("esc", "ctrl+a"), key.WithHelp("esc", "close"))},
-		keys.KeyCtrlA:    {Key: keys.KeyCtrlA, Handler: s.handleClose, Help: key.NewBinding(key.WithKeys("esc", "ctrl+a"), key.WithHelp("esc", "close"))},
-		keys.KeyCtrlC:    {Key: keys.KeyCtrlC, Handler: s.handleQuit, Help: key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit"))},
-		keys.KeyTab:      {Key: keys.KeyTab, Handler: s.handleSwitchFocus, Help: key.NewBinding(key.WithKeys("tab", "shift+tab", "up", "down"), key.WithHelp("tab", "switch field"))},
-		keys.KeyShiftTab: {Key: keys.KeyShiftTab, Handler: s.handleSwitchFocus, Help: key.NewBinding(key.WithKeys("tab", "shift+tab", "up", "down"), key.WithHelp("tab", "switch field"))},
-		keys.KeyUp:       {Key: keys.KeyUp, Handler: s.handleSwitchFocus, Help: key.NewBinding(key.WithKeys("tab", "shift+tab", "up", "down"), key.WithHelp("↑", "switch field"))},
-		keys.KeyDown:     {Key: keys.KeyDown, Handler: s.handleSwitchFocus, Help: key.NewBinding(key.WithKeys("tab", "shift+tab", "up", "down"), key.WithHelp("↓", "switch field"))},
-	}
-	s.confirmHandlers = BindingSet{
-		keys.KeyEnter:    {Key: keys.KeyEnter, Handler: s.handleConfirmDialog, Help: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "confirm"))},
-		keys.KeyTab:      {Key: keys.KeyTab, Handler: nil, Help: key.NewBinding(key.WithKeys("tab", "shift+tab"), key.WithHelp("tab", "move"))},
-		keys.KeyShiftTab: {Key: keys.KeyShiftTab, Handler: nil, Help: key.NewBinding(key.WithKeys("tab", "shift+tab"), key.WithHelp("tab", "move"))},
-		keys.KeyEsc:      {Key: keys.KeyEsc, Handler: s.handleCancelDialog, Help: key.NewBinding(key.WithKeys("esc", "ctrl+a"), key.WithHelp("esc", "cancel"))},
-		keys.KeyCtrlA:    {Key: keys.KeyCtrlA, Handler: s.handleCancelDialog, Help: key.NewBinding(key.WithKeys("esc", "ctrl+a"), key.WithHelp("esc", "cancel"))},
-		keys.KeyCtrlC:    {Key: keys.KeyCtrlC, Handler: s.handleQuit, Help: key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit"))},
+func (s *AddScreen) buildRegistry() Registry {
+	return Registry{
+		ModeDefault: NewMode(
+			Binding{Keys: []keys.Key{keys.KeyEnter}, Symbol: "enter", Label: "submit", Action: s.actionSubmit},
+			Binding{Keys: []keys.Key{keys.KeyTab, keys.KeyShiftTab, keys.KeyUp, keys.KeyDown}, Symbol: "tab", Label: "switch field", Action: s.actionSwitchFocus},
+			Binding{Keys: []keys.Key{keys.KeyEsc, keys.KeyCtrlA}, Symbol: "esc", Label: "close", Action: s.actionClose},
+			Binding{Keys: []keys.Key{keys.KeyCtrlC}, Symbol: "ctrl+c", Label: "quit", Action: s.actionQuit},
+		),
+		ModeDialog: NewMode(
+			Binding{Keys: []keys.Key{keys.KeyEnter}, Symbol: "enter", Label: "confirm", Action: s.actionConfirmDialog},
+			Binding{Keys: []keys.Key{keys.KeyTab, keys.KeyShiftTab}, Symbol: "tab", Label: "move", Action: s.actionDialogMove},
+			Binding{Keys: []keys.Key{keys.KeyEsc, keys.KeyCtrlA}, Symbol: "esc", Label: "cancel", Action: s.actionCancelDialog},
+			Binding{Keys: []keys.Key{keys.KeyCtrlC}, Symbol: "ctrl+c", Label: "quit", Action: s.actionQuit},
+		),
 	}
 }
 
-func (s *AddScreen) handleSubmit(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
-	return ctx.Run(ctx.App.RequestAddWorktree(strings.TrimSpace(s.path.Value()), strings.TrimSpace(s.branch.Value())))
+func (s *AddScreen) actionSubmit(actx *ActionCtx) app.Command {
+	return actx.App.RequestAddWorktree(strings.TrimSpace(s.path.Value()), strings.TrimSpace(s.branch.Value()))
 }
 
-func (s *AddScreen) handleClose(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
-	ctx.App.CloseAdd()
+func (s *AddScreen) actionClose(actx *ActionCtx) app.Command {
+	actx.App.CloseAdd()
 	s.path.Clear()
 	s.branch.Clear()
 	s.focusedPath = true
@@ -135,11 +124,11 @@ func (s *AddScreen) handleClose(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-func (s *AddScreen) handleQuit(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
-	return ctx.Quit()
+func (s *AddScreen) actionQuit(actx *ActionCtx) app.Command {
+	return actx.App.Quit()
 }
 
-func (s *AddScreen) handleSwitchFocus(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
+func (s *AddScreen) actionSwitchFocus(actx *ActionCtx) app.Command {
 	s.focusedPath = !s.focusedPath
 	if s.focusedPath {
 		s.path.Focus()
@@ -151,13 +140,17 @@ func (s *AddScreen) handleSwitchFocus(ctx *ScreenContext, msg tea.KeyMsg) tea.Cm
 	return nil
 }
 
-func (s *AddScreen) handleConfirmDialog(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
-	buttonID, _ := s.dialog.FocusedID()
-	return ctx.Run(ctx.App.DialogChoose(buttonID))
+func (s *AddScreen) actionConfirmDialog(actx *ActionCtx) app.Command {
+	return s.confirm.confirm(actx)
 }
 
-func (s *AddScreen) handleCancelDialog(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
-	ctx.App.DismissDialog()
+func (s *AddScreen) actionCancelDialog(actx *ActionCtx) app.Command {
+	s.confirm.close()
+	return nil
+}
+
+func (s *AddScreen) actionDialogMove(actx *ActionCtx) app.Command {
+	s.confirm.move(actx.Key)
 	return nil
 }
 
@@ -165,15 +158,7 @@ func (s *AddScreen) Reset() {
 	s.path.Clear()
 	s.branch.Clear()
 	s.focusedPath = true
-	s.dialogSignature = ""
+	s.confirm.close()
 	s.path.Focus()
 	s.branch.Blur()
-}
-
-func addDialogSignature(state app.DialogState) string {
-	parts := []string{string(state.Kind), state.Title, state.Description, state.FocusedID}
-	for _, button := range state.Buttons {
-		parts = append(parts, button.ID, button.Label)
-	}
-	return strings.Join(parts, "\x00")
 }

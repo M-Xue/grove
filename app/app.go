@@ -44,12 +44,14 @@ func (a *App) State() State {
 	return a.state
 }
 
-func (a *App) SubmittedPath() string {
-	return a.state.SubmittedPath
+// Quit signals that grove should exit without selecting a path. The terminal
+// is controlled by ui, so this surfaces as a QuitRequested message.
+func (a *App) Quit() Command {
+	return func() Message { return QuitRequested{} }
 }
 
-func (a *App) DismissDialog() {
-	a.clearDialog()
+func (a *App) SubmittedPath() string {
+	return a.state.SubmittedPath
 }
 
 func (a *App) DismissCompletedLoading() {

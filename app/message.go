@@ -63,11 +63,24 @@ type BranchesFetchedMessage struct {
 	Err       error
 }
 
-type BranchCheckedMessage struct {
+// BranchExistsMessage and BranchAbsentMessage are the semantic outcomes of
+// checking whether a branch exists before adding a worktree. The UI reacts to
+// BranchAbsentMessage by offering to create the branch; HandleMessage reacts to
+// BranchExistsMessage by adding the worktree directly.
+type BranchExistsMessage struct {
 	LoadingID string
 	Path      string
 	Branch    string
-	Exists    bool
+}
+
+type BranchAbsentMessage struct {
+	LoadingID string
+	Path      string
+	Branch    string
+}
+
+type BranchCheckFailedMessage struct {
+	LoadingID string
 	Err       error
 }
 

@@ -4,23 +4,19 @@ import (
 	"strings"
 
 	"github.com/M-Xue/grove/app"
-	"github.com/M-Xue/grove/ui/components/dialog"
 	"github.com/M-Xue/grove/ui/components/selectlist"
 	"github.com/M-Xue/grove/ui/components/textinput"
 	"github.com/M-Xue/grove/ui/keys"
-	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 type ChangeScreen struct {
-	dialog          dialog.Model
-	search          textinput.Model
-	list            selectlist.Model
-	defaultHandlers BindingSet
-	confirmHandlers BindingSet
-	worktrees       []appWorktree
-	dialogSignature string
+	confirm   confirmDialog
+	search    textinput.Model
+	list      selectlist.Model
+	registry  Registry
+	worktrees []appWorktree
 }
 
 type appWorktree struct {
@@ -30,12 +26,11 @@ type appWorktree struct {
 
 func NewChangeScreen() *ChangeScreen {
 	s := &ChangeScreen{
-		dialog: dialog.New(),
 		search: textinput.New("Search worktree paths"),
 		list:   selectlist.New("No matches"),
 	}
 	s.search.Focus()
-	s.initHandlers()
+	s.registry = s.buildRegistry()
 	return s
 }
 
@@ -49,45 +44,29 @@ func (s *ChangeScreen) Sync(state app.State) {
 	}
 	items = filterItems(items, s.search.Value())
 	s.list.SetItems(items)
-	if state.Dialog.Active {
-		signature := dialogSignature(state.Dialog)
-		if signature != s.dialogSignature {
-			s.dialog.SetTitle(state.Dialog.Title)
-			s.dialog.SetDescription(state.Dialog.Description)
-			buttons := make([]dialog.Button, 0, len(state.Dialog.Buttons))
-			for _, button := range state.Dialog.Buttons {
-				buttons = append(buttons, dialog.Button{ID: button.ID, Label: button.Label})
-			}
-			s.dialog.SetButtons(buttons)
-			s.dialog.SetFocusedID(state.Dialog.FocusedID)
-			s.dialogSignature = signature
-		}
-	} else {
-		s.dialogSignature = ""
+}
+
+func (s *ChangeScreen) OnMessage(ctx *ScreenContext, msg app.Message) tea.Cmd {
+	return nil
+}
+
+func (s *ChangeScreen) activeMode() Mode {
+	if s.confirm.active {
+		return ModeDialog
 	}
+	return ModeDefault
 }
 
 func (s *ChangeScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.State) tea.Cmd {
-	if state.Dialog.Active {
-		if consumed, cmd := s.dialog.Update(msg); consumed {
-			if cmd != nil {
-				return cmd
-			}
+	mode := s.activeMode()
+	if binding, ok := s.registry[mode].lookup(keys.Normalize(msg)); ok {
+		return ctx.Run(binding.Action(&ActionCtx{App: ctx.App, Key: msg}))
+	}
+	if mode == ModeDefault {
+		if consumed, cmd := s.search.Update(msg); consumed {
+			s.list.SetItems(filterItems(toItems(s.worktrees), s.search.Value()))
+			return cmd
 		}
-		if handler, ok := s.confirmHandlers.HandlerFor(keys.Normalize(msg)); ok && handler != nil {
-			return handler(ctx, msg)
-		}
-		return nil
-	}
-	if handler, ok := s.defaultHandlers.HandlerFor(keys.Normalize(msg)); ok && handler != nil {
-		return handler(ctx, msg)
-	}
-	if consumed, cmd := s.search.Update(msg); consumed {
-		s.list.SetItems(filterItems(toItems(s.worktrees), s.search.Value()))
-		return cmd
-	}
-	if consumed, cmd := s.list.Update(msg); consumed {
-		return cmd
 	}
 	return nil
 }
@@ -97,90 +76,92 @@ func (s *ChangeScreen) View(width, height int, state app.State) string {
 	body := s.list.View(max(1, height-len(header)))
 	contentLines := append(header, strings.Split(body, "\n")...)
 	content := strings.Join(contentLines, "\n")
-	if state.Dialog.Active {
-		return overlayDialog(content, s.dialog.View(width, height), width, height)
+	if s.confirm.active {
+		return overlayDialog(content, s.confirm.view(width, height), width, height)
 	}
 	return content
 }
 
 func (s *ChangeScreen) Footer(helpWidth int) string {
-	model := NewHelpModel()
-	model.Width = max(helpWidth, 0)
-	order := []keys.Key{keys.KeyEnter, keys.KeyCtrlA, keys.KeyCtrlB, keys.KeyCtrlD, keys.KeyUp, keys.KeyDown, keys.KeyEsc}
-	return model.ShortHelpView(s.defaultHandlers.HelpBindings(order))
+	return s.registry[s.activeMode()].footer(helpWidth)
 }
 
-func (s *ChangeScreen) DialogFooter(helpWidth int) string {
-	model := NewHelpModel()
-	model.Width = max(helpWidth, 0)
-	order := []keys.Key{keys.KeyEnter, keys.KeyTab, keys.KeyEsc, keys.KeyCtrlC}
-	return model.ShortHelpView(s.confirmHandlers.HelpBindings(order))
-}
-
-func (s *ChangeScreen) initHandlers() {
-	s.defaultHandlers = BindingSet{
-		keys.KeyEnter:    {Key: keys.KeyEnter, Handler: s.handleEnter, Help: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open"))},
-		keys.KeyCtrlA:    {Key: keys.KeyCtrlA, Handler: s.handleOpenAdd, Help: key.NewBinding(key.WithKeys("ctrl+a"), key.WithHelp("ctrl+a", "add"))},
-		keys.KeyCtrlB:    {Key: keys.KeyCtrlB, Handler: s.handleOpenBranches, Help: key.NewBinding(key.WithKeys("ctrl+b"), key.WithHelp("ctrl+b", "branches"))},
-		keys.KeyCtrlD:    {Key: keys.KeyCtrlD, Handler: s.handleStartRemove, Help: key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "remove"))},
-		keys.KeyUp:       {Key: keys.KeyUp, Handler: nil, Help: key.NewBinding(key.WithKeys("up", "shift+tab"), key.WithHelp("↑/shift+tab", "move"))},
-		keys.KeyDown:     {Key: keys.KeyDown, Handler: nil, Help: key.NewBinding(key.WithKeys("down", "tab"), key.WithHelp("↓/tab", "move"))},
-		keys.KeyEsc:      {Key: keys.KeyEsc, Handler: s.handleQuit, Help: key.NewBinding(key.WithKeys("esc", "ctrl+c"), key.WithHelp("esc", "quit"))},
-		keys.KeyCtrlC:    {Key: keys.KeyCtrlC, Handler: s.handleQuit, Help: key.NewBinding(key.WithKeys("esc", "ctrl+c"), key.WithHelp("esc", "quit"))},
-	}
-	s.confirmHandlers = BindingSet{
-		keys.KeyEnter:    {Key: keys.KeyEnter, Handler: s.handleConfirmDialog, Help: key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "confirm"))},
-		keys.KeyTab:      {Key: keys.KeyTab, Handler: nil, Help: key.NewBinding(key.WithKeys("tab", "shift+tab"), key.WithHelp("tab", "move"))},
-		keys.KeyShiftTab: {Key: keys.KeyShiftTab, Handler: nil, Help: key.NewBinding(key.WithKeys("tab", "shift+tab"), key.WithHelp("tab", "move"))},
-		keys.KeyEsc:      {Key: keys.KeyEsc, Handler: s.handleCancelDialog, Help: key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel"))},
-		keys.KeyCtrlC:    {Key: keys.KeyCtrlC, Handler: s.handleQuit, Help: key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit"))},
+func (s *ChangeScreen) buildRegistry() Registry {
+	return Registry{
+		ModeDefault: NewMode(
+			Binding{Keys: []keys.Key{keys.KeyEnter}, Symbol: "enter", Label: "open", Action: s.actionSubmit},
+			Binding{Keys: []keys.Key{keys.KeyCtrlA}, Symbol: "ctrl+a", Label: "add", Action: s.actionOpenAdd},
+			Binding{Keys: []keys.Key{keys.KeyCtrlB}, Symbol: "ctrl+b", Label: "branches", Action: s.actionOpenBranches},
+			Binding{Keys: []keys.Key{keys.KeyCtrlD}, Symbol: "ctrl+d", Label: "remove", Action: s.actionStartRemove},
+			Binding{Keys: []keys.Key{keys.KeyUp, keys.KeyShiftTab}, Symbol: "↑/shift+tab", Label: "move", Action: s.actionMoveSelection},
+			Binding{Keys: []keys.Key{keys.KeyDown, keys.KeyTab}, Symbol: "↓/tab", Label: "move", Action: s.actionMoveSelection},
+			Binding{Keys: []keys.Key{keys.KeyEsc, keys.KeyCtrlC}, Symbol: "esc", Label: "quit", Action: s.actionQuit},
+		),
+		ModeDialog: NewMode(
+			Binding{Keys: []keys.Key{keys.KeyEnter}, Symbol: "enter", Label: "confirm", Action: s.actionConfirmDialog},
+			Binding{Keys: []keys.Key{keys.KeyTab, keys.KeyShiftTab}, Symbol: "tab", Label: "move", Action: s.actionDialogMove},
+			Binding{Keys: []keys.Key{keys.KeyEsc}, Symbol: "esc", Label: "cancel", Action: s.actionCancelDialog},
+			Binding{Keys: []keys.Key{keys.KeyCtrlC}, Symbol: "ctrl+c", Label: "quit", Action: s.actionQuit},
+		),
 	}
 }
 
-func (s *ChangeScreen) handleEnter(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
+func (s *ChangeScreen) actionSubmit(actx *ActionCtx) app.Command {
 	item, ok := s.list.SelectedItem()
 	if !ok {
-		return ctx.Run(ctx.App.RequestSubmitSelectedPath(""))
+		return actx.App.RequestSubmitSelectedPath("")
 	}
-	return ctx.Run(ctx.App.RequestSubmitSelectedPath(item.ID))
+	return actx.App.RequestSubmitSelectedPath(item.ID)
 }
 
-func (s *ChangeScreen) handleOpenAdd(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
-	ctx.App.OpenAdd()
+func (s *ChangeScreen) actionOpenAdd(actx *ActionCtx) app.Command {
+	actx.App.OpenAdd()
 	return nil
 }
 
-func (s *ChangeScreen) handleStartRemove(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
+func (s *ChangeScreen) actionOpenBranches(actx *ActionCtx) app.Command {
+	return actx.App.OpenBranch()
+}
+
+func (s *ChangeScreen) actionStartRemove(actx *ActionCtx) app.Command {
 	item, ok := s.list.SelectedItem()
 	if !ok {
-		ctx.App.RequestRemoveWorktree("")
-		return nil
+		return actx.App.RemoveWorktree("")
 	}
-	ctx.App.RequestRemoveWorktree(item.ID)
+	path := item.ID
+	s.confirm.open("Delete worktree?", path, "Delete", false, func(actx *ActionCtx) app.Command {
+		return actx.App.RemoveWorktree(path)
+	})
 	return nil
 }
-func (s *ChangeScreen) handleOpenBranches(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
-	return ctx.Run(ctx.App.OpenBranch())
+
+func (s *ChangeScreen) actionMoveSelection(actx *ActionCtx) app.Command {
+	s.list.Update(actx.Key)
+	return nil
 }
 
-func (s *ChangeScreen) handleQuit(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
-	return ctx.Quit()
+func (s *ChangeScreen) actionQuit(actx *ActionCtx) app.Command {
+	return actx.App.Quit()
 }
 
-func (s *ChangeScreen) handleConfirmDialog(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
-	buttonID, _ := s.dialog.FocusedID()
-	return ctx.Run(ctx.App.DialogChoose(buttonID))
+func (s *ChangeScreen) actionConfirmDialog(actx *ActionCtx) app.Command {
+	return s.confirm.confirm(actx)
 }
 
-func (s *ChangeScreen) handleCancelDialog(ctx *ScreenContext, msg tea.KeyMsg) tea.Cmd {
-	ctx.App.DismissDialog()
+func (s *ChangeScreen) actionCancelDialog(actx *ActionCtx) app.Command {
+	s.confirm.close()
+	return nil
+}
+
+func (s *ChangeScreen) actionDialogMove(actx *ActionCtx) app.Command {
+	s.confirm.move(actx.Key)
 	return nil
 }
 
 func (s *ChangeScreen) Reset() {
 	s.search.Clear()
 	s.search.Focus()
-	s.dialogSignature = ""
+	s.confirm.close()
 	s.list.SetItems(toItems(s.worktrees))
 }
 
@@ -204,12 +185,4 @@ func toItems(worktrees []appWorktree) []selectlist.Item {
 		items = append(items, selectlist.Item{ID: worktree.id, Label: worktree.label})
 	}
 	return items
-}
-
-func dialogSignature(state app.DialogState) string {
-	parts := []string{string(state.Kind), state.Title, state.Description, state.FocusedID}
-	for _, button := range state.Buttons {
-		parts = append(parts, button.ID, button.Label)
-	}
-	return strings.Join(parts, "\x00")
 }

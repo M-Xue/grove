@@ -9,18 +9,12 @@ func (a *App) RequestSubmitSelectedPath(path string) Command {
 	return func() Message { return QuitRequested{} }
 }
 
-func (a *App) RequestRemoveWorktree(path string) {
+// RemoveWorktree removes the worktree at path. An empty path reports "no
+// worktree selected" and does nothing.
+func (a *App) RemoveWorktree(path string) Command {
 	if path == "" {
 		a.appendStatus(StatusInfo, "no worktree selected")
-		return
+		return nil
 	}
-	a.state.Dialog = DialogState{
-		Active:      true,
-		Title:       "Delete worktree?",
-		Description: path,
-		Buttons:     []DialogButton{{ID: "confirm", Label: "Delete"}, {ID: "cancel", Label: "Cancel"}},
-		FocusedID:   "cancel",
-		Kind:        DialogConfirmRemove,
-		Path:        path,
-	}
+	return a.removeWorktree(path)
 }

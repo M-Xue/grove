@@ -87,7 +87,13 @@ func (a *App) checkBranchExists(path, branch string) Command {
 	worktrees := a.services.Worktree
 	return func() Message {
 		exists, err := worktrees.BranchExists(branch)
-		return BranchCheckedMessage{LoadingID: id, Path: path, Branch: branch, Exists: exists, Err: err}
+		if err != nil {
+			return BranchCheckFailedMessage{LoadingID: id, Err: err}
+		}
+		if exists {
+			return BranchExistsMessage{LoadingID: id, Path: path, Branch: branch}
+		}
+		return BranchAbsentMessage{LoadingID: id, Path: path, Branch: branch}
 	}
 }
 

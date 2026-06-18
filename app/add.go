@@ -2,9 +2,6 @@ package app
 
 func (a *App) OpenAdd() {
 	a.state.Screen = ScreenAdd
-	if a.state.Dialog.Active {
-		a.clearDialog()
-	}
 	if len(a.state.Loading) > 0 {
 		a.ClearLoading()
 	}
@@ -12,7 +9,6 @@ func (a *App) OpenAdd() {
 
 func (a *App) CloseAdd() {
 	a.state.Screen = ScreenChange
-	a.clearDialog()
 	a.ClearLoading()
 }
 
@@ -26,4 +22,10 @@ func (a *App) RequestAddWorktree(path, branch string) Command {
 		return nil
 	}
 	return a.checkBranchExists(path, branch)
+}
+
+// CreateBranchWorktree creates a new branch and a worktree for it. It is the
+// operation the UI invokes when the user confirms creating a missing branch.
+func (a *App) CreateBranchWorktree(path, branch string) Command {
+	return a.addWorktree(path, branch, true)
 }
