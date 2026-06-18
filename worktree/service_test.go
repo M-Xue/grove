@@ -2,9 +2,25 @@ package worktree
 
 import (
 	"errors"
+	"io/fs"
+	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 )
+
+// fakeFileInfo is a minimal fs.FileInfo carrying only a mod time, used to
+// drive worktree creation-time ordering in tests.
+type fakeFileInfo struct {
+	modTime time.Time
+}
+
+func (f fakeFileInfo) Name() string       { return "gitdir" }
+func (f fakeFileInfo) Size() int64        { return 0 }
+func (f fakeFileInfo) Mode() fs.FileMode  { return 0 }
+func (f fakeFileInfo) ModTime() time.Time { return f.modTime }
+func (f fakeFileInfo) IsDir() bool        { return false }
+func (f fakeFileInfo) Sys() any           { return nil }
 
 type commandCall struct {
 	name string
@@ -322,6 +338,104 @@ func TestServiceListReturnsStructuredWorktrees(t *testing.T) {
 
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("unexpected worktrees: got %#v want %#v", got, want)
+	}
+}
+
+func TestServiceListPinsMainWorktreeThenOrdersRestOldestFirst(t *testing.T) {
+	runner := &stubRunner{
+		results: map[string]commandResult{
+			// git always lists the main worktree (/main) first, even though it
+			// was created before the linked worktrees below it.
+			commandKey("git", "worktree", "list", "--porcelain"): {
+				output: []byte("worktree /main\nHEAD m\nbranch refs/heads/main\n\nworktree /new\nHEAD n\nbranch refs/heads/new\n\nworktree /old\nHEAD o\nbranch refs/heads/old\n"),
+			},
+			commandKey("git", "-C", "/main", "log", "-1", "--pretty=%s"):        {output: []byte("main\n")},
+			commandKey("git", "-C", "/main", "status", "--porcelain"):           {output: []byte("")},
+			commandKey("git", "-C", "/main", "rev-parse", "--absolute-git-dir"): {output: []byte("/main/.git\n")},
+			commandKey("git", "-C", "/new", "log", "-1", "--pretty=%s"):         {output: []byte("new\n")},
+			commandKey("git", "-C", "/new", "status", "--porcelain"):            {output: []byte("")},
+			commandKey("git", "-C", "/new", "rev-parse", "--absolute-git-dir"):  {output: []byte("/new/.git\n")},
+			commandKey("git", "-C", "/old", "log", "-1", "--pretty=%s"):         {output: []byte("old\n")},
+			commandKey("git", "-C", "/old", "status", "--porcelain"):            {output: []byte("")},
+			commandKey("git", "-C", "/old", "rev-parse", "--absolute-git-dir"):  {output: []byte("/old/.git\n")},
+		},
+	}
+
+	// /main is the newest by mod time, yet must still be pinned to the top.
+	modTimes := map[string]time.Time{
+		filepath.Join("/main/.git", "gitdir"): time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		filepath.Join("/new/.git", "gitdir"):  time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC),
+		filepath.Join("/old/.git", "gitdir"):  time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+	}
+	svc := service{
+		runner: runner,
+		stat: func(name string) (fs.FileInfo, error) {
+			if t, ok := modTimes[name]; ok {
+				return fakeFileInfo{modTime: t}, nil
+			}
+			return nil, errors.New("not found")
+		},
+	}
+
+	got, err := svc.List()
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+
+	gotPaths := []string{}
+	for _, w := range got {
+		gotPaths = append(gotPaths, w.Path)
+	}
+	want := []string{"/main", "/old", "/new"}
+	if !reflect.DeepEqual(gotPaths, want) {
+		t.Fatalf("expected order %v (main pinned, then oldest-first), got %v", want, gotPaths)
+	}
+}
+
+func TestServiceListSortsUndeterminableCreationTimesLast(t *testing.T) {
+	runner := &stubRunner{
+		results: map[string]commandResult{
+			// /main pinned first, /dated has a known creation time, and /stale
+			// is prunable so its time is undeterminable (zero).
+			commandKey("git", "worktree", "list", "--porcelain"): {
+				output: []byte("worktree /main\nHEAD m\nbranch refs/heads/main\n\nworktree /stale\nHEAD s\nbranch refs/heads/stale\nprunable gitdir gone\n\nworktree /dated\nHEAD d\nbranch refs/heads/dated\n"),
+			},
+			commandKey("git", "-C", "/main", "log", "-1", "--pretty=%s"):         {output: []byte("main\n")},
+			commandKey("git", "-C", "/main", "status", "--porcelain"):            {output: []byte("")},
+			commandKey("git", "-C", "/main", "rev-parse", "--absolute-git-dir"):  {output: []byte("/main/.git\n")},
+			commandKey("git", "-C", "/dated", "log", "-1", "--pretty=%s"):        {output: []byte("dated\n")},
+			commandKey("git", "-C", "/dated", "status", "--porcelain"):           {output: []byte("")},
+			commandKey("git", "-C", "/dated", "rev-parse", "--absolute-git-dir"): {output: []byte("/dated/.git\n")},
+		},
+	}
+
+	modTimes := map[string]time.Time{
+		filepath.Join("/main/.git", "gitdir"):  time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		filepath.Join("/dated/.git", "gitdir"): time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+	}
+	svc := service{
+		runner: runner,
+		stat: func(name string) (fs.FileInfo, error) {
+			if t, ok := modTimes[name]; ok {
+				return fakeFileInfo{modTime: t}, nil
+			}
+			return nil, errors.New("not found")
+		},
+	}
+
+	got, err := svc.List()
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+
+	gotPaths := []string{}
+	for _, w := range got {
+		gotPaths = append(gotPaths, w.Path)
+	}
+	// Main pinned, the dated worktree next, and the stale (zero-time) one last.
+	want := []string{"/main", "/dated", "/stale"}
+	if !reflect.DeepEqual(gotPaths, want) {
+		t.Fatalf("expected order %v, got %v", want, gotPaths)
 	}
 }
 
