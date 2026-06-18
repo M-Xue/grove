@@ -18,7 +18,21 @@ const maxVisibleBranches = 10
 const branchWarningPrefixColor = "\x1b[38;5;203m"
 const branchWarningResetColor = "\x1b[0m"
 
+// branchApp is the narrow view of app the branch screen depends on.
+type branchApp interface {
+	RequestCheckoutBranch(name string) app.Command
+	RequestFetchBranches() app.Command
+	RequestToggleBranchScope() app.Command
+	CloseBranch() app.Command
+	SelectBranch(name string) app.Command
+	DeleteBranch(name string) app.Command
+	CanDeleteAllBranches() bool
+	DeleteAllBranches() app.Command
+	Quit() app.Command
+}
+
 type BranchScreen struct {
+	app      branchApp
 	confirm  confirmDialog
 	search   textinput.Model
 	list     selectlist.Model
@@ -32,8 +46,9 @@ type branchItem struct {
 	label string
 }
 
-func NewBranchScreen() *BranchScreen {
+func NewBranchScreen(application branchApp) *BranchScreen {
 	s := &BranchScreen{
+		app:    application,
 		search: textinput.New("Search branches"),
 		list:   selectlist.New("No matches"),
 	}
@@ -81,7 +96,7 @@ func (s *BranchScreen) activeMode() Mode {
 func (s *BranchScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.State) tea.Cmd {
 	mode := s.activeMode()
 	if binding, ok := s.registry[mode].lookup(keys.Normalize(msg)); ok {
-		return ctx.Run(binding.Action(&ActionCtx{App: ctx.App, Key: msg}))
+		return ctx.Run(binding.Action(&ActionCtx{Key: msg}))
 	}
 	if mode == ModeDefault {
 		if consumed, cmd := s.search.Update(msg); consumed {
@@ -167,50 +182,50 @@ func (s *BranchScreen) buildRegistry() Registry {
 func (s *BranchScreen) actionCheckout(actx *ActionCtx) app.Command {
 	item, ok := s.list.SelectedItem()
 	if !ok {
-		return actx.App.RequestCheckoutBranch("")
+		return s.app.RequestCheckoutBranch("")
 	}
-	return actx.App.RequestCheckoutBranch(item.ID)
+	return s.app.RequestCheckoutBranch(item.ID)
 }
 
 func (s *BranchScreen) actionFetch(actx *ActionCtx) app.Command {
-	return actx.App.RequestFetchBranches()
+	return s.app.RequestFetchBranches()
 }
 
 func (s *BranchScreen) actionToggleScope(actx *ActionCtx) app.Command {
-	return actx.App.RequestToggleBranchScope()
+	return s.app.RequestToggleBranchScope()
 }
 
 func (s *BranchScreen) actionClose(actx *ActionCtx) app.Command {
-	return actx.App.CloseBranch()
+	return s.app.CloseBranch()
 }
 
 func (s *BranchScreen) actionQuit(actx *ActionCtx) app.Command {
-	return actx.App.Quit()
+	return s.app.Quit()
 }
 
 func (s *BranchScreen) actionMoveSelection(actx *ActionCtx) app.Command {
 	s.list.Update(actx.Key)
 	item, ok := s.list.SelectedItem()
 	if !ok {
-		return actx.App.SelectBranch("")
+		return s.app.SelectBranch("")
 	}
-	return actx.App.SelectBranch(item.ID)
+	return s.app.SelectBranch(item.ID)
 }
 
 func (s *BranchScreen) actionDelete(actx *ActionCtx) app.Command {
 	item, ok := s.list.SelectedItem()
 	if !ok {
-		return actx.App.DeleteBranch("")
+		return s.app.DeleteBranch("")
 	}
 	name := item.ID
 	s.confirm.open("Delete branch?", name, "Delete", false, func(actx *ActionCtx) app.Command {
-		return actx.App.DeleteBranch(name)
+		return s.app.DeleteBranch(name)
 	})
 	return nil
 }
 
 func (s *BranchScreen) actionDeleteAll(actx *ActionCtx) app.Command {
-	if !actx.App.CanDeleteAllBranches() {
+	if !s.app.CanDeleteAllBranches() {
 		return nil
 	}
 	description := "Delete all local branches except ones currently checked out here or in another worktree?"
@@ -218,7 +233,7 @@ func (s *BranchScreen) actionDeleteAll(actx *ActionCtx) app.Command {
 		description += "\n\n" + strings.Join(names, "\n")
 	}
 	s.confirm.open("Delete all local branches?", description, "Delete", false, func(actx *ActionCtx) app.Command {
-		return actx.App.DeleteAllBranches()
+		return s.app.DeleteAllBranches()
 	})
 	return nil
 }
@@ -251,9 +266,9 @@ func (s *BranchScreen) branchNames() []string {
 func (s *BranchScreen) selectionCommand(ctx *ScreenContext) tea.Cmd {
 	item, ok := s.list.SelectedItem()
 	if !ok {
-		return ctx.Run(ctx.App.SelectBranch(""))
+		return ctx.Run(s.app.SelectBranch(""))
 	}
-	return ctx.Run(ctx.App.SelectBranch(item.ID))
+	return ctx.Run(s.app.SelectBranch(item.ID))
 }
 
 func (s *BranchScreen) Reset() {

@@ -11,7 +11,16 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// addApp is the narrow view of app the add screen depends on.
+type addApp interface {
+	RequestAddWorktree(path, branch string) app.Command
+	CloseAdd()
+	CreateBranchWorktree(path, branch string) app.Command
+	Quit() app.Command
+}
+
 type AddScreen struct {
+	app         addApp
 	confirm     confirmDialog
 	path        textinput.Model
 	branch      textinput.Model
@@ -19,8 +28,9 @@ type AddScreen struct {
 	registry    Registry
 }
 
-func NewAddScreen() *AddScreen {
+func NewAddScreen(application addApp) *AddScreen {
 	s := &AddScreen{
+		app:         application,
 		path:        textinput.New("Relative path"),
 		branch:      textinput.New("Branch name"),
 		focusedPath: true,
@@ -46,7 +56,7 @@ func (s *AddScreen) OnMessage(ctx *ScreenContext, msg app.Message) tea.Cmd {
 		"Create",
 		true,
 		func(actx *ActionCtx) app.Command {
-			return actx.App.CreateBranchWorktree(path, branchName)
+			return s.app.CreateBranchWorktree(path, branchName)
 		},
 	)
 	return nil
@@ -62,7 +72,7 @@ func (s *AddScreen) activeMode() Mode {
 func (s *AddScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.State) tea.Cmd {
 	mode := s.activeMode()
 	if binding, ok := s.registry[mode].lookup(keys.Normalize(msg)); ok {
-		return ctx.Run(binding.Action(&ActionCtx{App: ctx.App, Key: msg}))
+		return ctx.Run(binding.Action(&ActionCtx{Key: msg}))
 	}
 	if mode == ModeDefault {
 		active := &s.path
@@ -111,11 +121,11 @@ func (s *AddScreen) buildRegistry() Registry {
 }
 
 func (s *AddScreen) actionSubmit(actx *ActionCtx) app.Command {
-	return actx.App.RequestAddWorktree(strings.TrimSpace(s.path.Value()), strings.TrimSpace(s.branch.Value()))
+	return s.app.RequestAddWorktree(strings.TrimSpace(s.path.Value()), strings.TrimSpace(s.branch.Value()))
 }
 
 func (s *AddScreen) actionClose(actx *ActionCtx) app.Command {
-	actx.App.CloseAdd()
+	s.app.CloseAdd()
 	s.path.Clear()
 	s.branch.Clear()
 	s.focusedPath = true
@@ -125,7 +135,7 @@ func (s *AddScreen) actionClose(actx *ActionCtx) app.Command {
 }
 
 func (s *AddScreen) actionQuit(actx *ActionCtx) app.Command {
-	return actx.App.Quit()
+	return s.app.Quit()
 }
 
 func (s *AddScreen) actionSwitchFocus(actx *ActionCtx) app.Command {

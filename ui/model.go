@@ -38,9 +38,9 @@ func New(application *app.App) *Model {
 		screen:  application.State().Screen,
 		loading: loading.New(),
 		status:  status.New(),
-		change:  screens.NewChangeScreen(),
-		add:     screens.NewAddScreen(),
-		branch:  screens.NewBranchScreen(),
+		change:  screens.NewChangeScreen(application),
+		add:     screens.NewAddScreen(application),
+		branch:  screens.NewBranchScreen(application),
 	}
 }
 
@@ -91,7 +91,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) screenContext() *screens.ScreenContext {
-	return &screens.ScreenContext{App: m.app, Run: m.run}
+	return &screens.ScreenContext{Run: m.run}
 }
 
 // deliverMessage hands a completed message to the active screen so it can react

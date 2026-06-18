@@ -7,7 +7,7 @@ import (
 )
 
 func TestAddScreenOpensCreateDialogOnBranchAbsent(t *testing.T) {
-	s := NewAddScreen()
+	s := NewAddScreen(fakeApp{})
 	ctx := &ScreenContext{}
 	if s.confirm.active {
 		t.Fatal("dialog should start closed")
@@ -19,7 +19,7 @@ func TestAddScreenOpensCreateDialogOnBranchAbsent(t *testing.T) {
 }
 
 func TestAddScreenIgnoresUnrelatedMessages(t *testing.T) {
-	s := NewAddScreen()
+	s := NewAddScreen(fakeApp{})
 	s.OnMessage(&ScreenContext{}, app.BranchExistsMessage{Path: "../feature", Branch: "feature"})
 	if s.confirm.active {
 		t.Fatal("did not expect a dialog for BranchExistsMessage")
