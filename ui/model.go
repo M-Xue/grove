@@ -62,14 +62,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		next := m.app.HandleMessage(msg.msg)
 		m.syncScreenTransitions(previousScreen, m.app.State().Screen)
 		m.syncScreens()
-		return m, m.run(next)
+		// Deliver the message to the active screen for UI reactions (e.g.
+		// opening a dialog) in addition to app's state update above.
+		reaction := m.deliverMessage(msg.msg)
+		return m, tea.Batch(m.run(next), reaction)
 	case tea.KeyMsg:
 		m.app.DismissCompletedLoading()
 		if len(m.app.State().Statuses) > 0 {
 			m.app.ClearStatus()
 		}
 		m.syncScreens()
-		ctx := &screens.ScreenContext{App: m.app, Run: m.run, Quit: func() tea.Cmd { return tea.Quit }}
+		ctx := m.screenContext()
 		var cmd tea.Cmd
 		switch m.app.State().Screen {
 		case app.ScreenAdd:
@@ -84,6 +87,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	default:
 		return m, nil
+	}
+}
+
+func (m *Model) screenContext() *screens.ScreenContext {
+	return &screens.ScreenContext{App: m.app, Run: m.run}
+}
+
+// deliverMessage hands a completed message to the active screen so it can react
+// in the UI (open a dialog, clear search). The screen owns this presentation
+// state; app owns the domain state updated by HandleMessage.
+func (m *Model) deliverMessage(msg app.Message) tea.Cmd {
+	ctx := m.screenContext()
+	switch m.app.State().Screen {
+	case app.ScreenAdd:
+		return m.add.OnMessage(ctx, msg)
+	case app.ScreenBranch:
+		return m.branch.OnMessage(ctx, msg)
+	default:
+		return m.change.OnMessage(ctx, msg)
 	}
 }
 
@@ -280,13 +302,10 @@ func placeLeftRight(left, right string, width int) string {
 func (m *Model) footer(contentWidth int, state app.State) string {
 	switch state.Screen {
 	case app.ScreenAdd:
-		return m.add.Footer(contentWidth, state.Dialog.Active)
+		return m.add.Footer(contentWidth)
 	case app.ScreenBranch:
-		return m.branch.Footer(contentWidth, state.BranchScope)
+		return m.branch.Footer(contentWidth)
 	default:
-		if state.Dialog.Active {
-			return m.change.DialogFooter(contentWidth)
-		}
 		return m.change.Footer(contentWidth)
 	}
 }

@@ -1,7 +1,6 @@
 package app
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/M-Xue/grove/branch"
@@ -109,14 +108,24 @@ func TestRequestAddWorktreeRequiresPathAndBranch(t *testing.T) {
 	}
 }
 
-func TestDialogChooseCancelClearsDialog(t *testing.T) {
+func TestRemoveWorktreeRequiresSelection(t *testing.T) {
 	a := New(Services{})
-	a.RequestRemoveWorktree("/repo")
-	if cmd := a.DialogChoose("cancel"); cmd != nil {
-		t.Fatal("expected nil command on cancel")
+	if cmd := a.RemoveWorktree(""); cmd != nil {
+		t.Fatalf("expected nil command, got %#v", cmd)
 	}
-	if a.State().Dialog.Active {
-		t.Fatal("expected dialog to clear")
+	if len(a.State().Statuses) != 1 {
+		t.Fatalf("expected one status, got %d", len(a.State().Statuses))
+	}
+}
+
+func TestRemoveWorktreeReturnsCommand(t *testing.T) {
+	a := New(Services{})
+	cmd := a.RemoveWorktree("/repo")
+	if cmd == nil {
+		t.Fatal("expected a remove command")
+	}
+	if len(a.State().Loading) != 1 || a.State().Loading[0].Message != "removing worktree" {
+		t.Fatalf("expected remove-worktree loading entry, got %#v", a.State().Loading)
 	}
 }
 
@@ -171,10 +180,10 @@ func TestConcurrentLoadingClearsOnlyCompletedEntry(t *testing.T) {
 	_ = id2
 }
 
-func TestBranchCheckedPreservesCompletedCheckingPhase(t *testing.T) {
+func TestBranchExistsPreservesCompletedCheckingPhase(t *testing.T) {
 	a := New(Services{})
 	id := a.setLoading("checking branch")
-	cmd := a.HandleMessage(BranchCheckedMessage{LoadingID: id, Path: "../repo", Branch: "feature", Exists: true})
+	cmd := a.HandleMessage(BranchExistsMessage{LoadingID: id, Path: "../repo", Branch: "feature"})
 	if cmd == nil {
 		t.Fatal("expected an add-worktree command")
 	}
@@ -187,6 +196,19 @@ func TestBranchCheckedPreservesCompletedCheckingPhase(t *testing.T) {
 	}
 	if state.Loading[1].Message != "adding worktree" || state.Loading[1].Completed {
 		t.Fatalf("expected active adding worktree entry, got %#v", state.Loading[1])
+	}
+}
+
+func TestBranchAbsentResolvesCheckWithoutChaining(t *testing.T) {
+	a := New(Services{})
+	id := a.setLoading("checking branch")
+	cmd := a.HandleMessage(BranchAbsentMessage{LoadingID: id, Path: "../repo", Branch: "feature"})
+	if cmd != nil {
+		t.Fatalf("expected nil command (UI opens the dialog), got %#v", cmd)
+	}
+	state := a.State()
+	if len(state.Loading) != 1 || !state.Loading[0].Completed {
+		t.Fatalf("expected checking-branch entry marked done, got %#v", state.Loading)
 	}
 }
 
@@ -236,9 +258,9 @@ func TestRequestCheckoutBranchRequiresSelection(t *testing.T) {
 	}
 }
 
-func TestRequestDeleteBranchRequiresSelection(t *testing.T) {
+func TestDeleteBranchRequiresSelection(t *testing.T) {
 	a := New(Services{})
-	if cmd := a.RequestDeleteBranch(""); cmd != nil {
+	if cmd := a.DeleteBranch(""); cmd != nil {
 		t.Fatalf("expected nil command, got %#v", cmd)
 	}
 	if len(a.State().Statuses) != 1 {
@@ -246,27 +268,9 @@ func TestRequestDeleteBranchRequiresSelection(t *testing.T) {
 	}
 }
 
-func TestRequestDeleteBranchOpensConfirmationDialog(t *testing.T) {
+func TestDeleteBranchReturnsCommand(t *testing.T) {
 	a := New(Services{})
-	if cmd := a.RequestDeleteBranch("feature/a"); cmd != nil {
-		t.Fatalf("expected nil command, got %#v", cmd)
-	}
-	state := a.State()
-	if !state.Dialog.Active {
-		t.Fatal("expected dialog to be active")
-	}
-	if state.Dialog.Kind != DialogConfirmDeleteBranch {
-		t.Fatalf("unexpected dialog kind: %q", state.Dialog.Kind)
-	}
-	if state.Dialog.Branch != "feature/a" {
-		t.Fatalf("unexpected dialog branch: %q", state.Dialog.Branch)
-	}
-}
-
-func TestDialogChooseDeleteBranchReturnsCommand(t *testing.T) {
-	a := New(Services{})
-	a.RequestDeleteBranch("feature/a")
-	cmd := a.DialogChoose("confirm")
+	cmd := a.DeleteBranch("feature/a")
 	if cmd == nil {
 		t.Fatal("expected a delete command")
 	}
@@ -275,53 +279,43 @@ func TestDialogChooseDeleteBranchReturnsCommand(t *testing.T) {
 	}
 }
 
-func TestRequestDeleteAllBranchesRequiresLocalScope(t *testing.T) {
+func TestCanDeleteAllBranchesRequiresLocalScope(t *testing.T) {
 	a := New(Services{})
 	a.state.BranchScope = branch.ScopeRemoteTracking
-	if cmd := a.RequestDeleteAllBranches(); cmd != nil {
-		t.Fatalf("expected nil command, got %#v", cmd)
+	if a.CanDeleteAllBranches() {
+		t.Fatal("expected false in remote-tracking scope")
 	}
 	if len(a.State().Statuses) != 1 {
 		t.Fatalf("expected one status, got %d", len(a.State().Statuses))
 	}
 }
 
-func TestRequestDeleteAllBranchesRequiresLoadedBranches(t *testing.T) {
+func TestCanDeleteAllBranchesRequiresLoadedBranches(t *testing.T) {
 	a := New(Services{})
 	a.state.BranchScope = branch.ScopeLocal
-	if cmd := a.RequestDeleteAllBranches(); cmd != nil {
-		t.Fatalf("expected nil command, got %#v", cmd)
+	if a.CanDeleteAllBranches() {
+		t.Fatal("expected false with no branches")
 	}
 	if len(a.State().Statuses) != 1 {
 		t.Fatalf("expected one status, got %d", len(a.State().Statuses))
 	}
 }
 
-func TestRequestDeleteAllBranchesOpensConfirmationDialog(t *testing.T) {
+func TestCanDeleteAllBranchesAllowsLocalWithBranches(t *testing.T) {
 	a := New(Services{})
 	a.state.BranchScope = branch.ScopeLocal
 	a.state.Branches = []branch.Info{{Name: "feature/a"}, {Name: "main"}}
-	if cmd := a.RequestDeleteAllBranches(); cmd != nil {
-		t.Fatalf("expected nil command, got %#v", cmd)
+	if !a.CanDeleteAllBranches() {
+		t.Fatal("expected true for local scope with branches")
 	}
-	state := a.State()
-	if !state.Dialog.Active {
-		t.Fatal("expected dialog to be active")
-	}
-	if state.Dialog.Kind != DialogConfirmDeleteAllBranches {
-		t.Fatalf("unexpected dialog kind: %q", state.Dialog.Kind)
-	}
-	if !strings.Contains(state.Dialog.Description, "feature/a") || !strings.Contains(state.Dialog.Description, "main") {
-		t.Fatalf("unexpected dialog description: %q", state.Dialog.Description)
+	if len(a.State().Statuses) != 0 {
+		t.Fatalf("expected no status, got %d", len(a.State().Statuses))
 	}
 }
 
-func TestDialogChooseDeleteAllBranchesReturnsCommand(t *testing.T) {
+func TestDeleteAllBranchesReturnsCommand(t *testing.T) {
 	a := New(Services{})
-	a.state.BranchScope = branch.ScopeLocal
-	a.state.Branches = []branch.Info{{Name: "feature/a"}}
-	a.RequestDeleteAllBranches()
-	cmd := a.DialogChoose("confirm")
+	cmd := a.DeleteAllBranches()
 	if cmd == nil {
 		t.Fatal("expected a delete-all command")
 	}

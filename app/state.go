@@ -45,10 +45,6 @@ func (a *App) ClearLoading() {
 	a.state.Loading = nil
 }
 
-func (a *App) clearDialog() {
-	a.state.Dialog = DialogState{}
-}
-
 func nextLoadingID(counter int) string {
 	return fmt.Sprintf("loading-%d", counter)
 }

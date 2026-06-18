@@ -7,38 +7,6 @@ import (
 	"github.com/M-Xue/grove/branch"
 )
 
-// DialogChoose resolves an active dialog. Cancelling clears it; confirming
-// clears it and returns the Command for the chosen operation.
-func (a *App) DialogChoose(buttonID string) Command {
-	if !a.state.Dialog.Active {
-		return nil
-	}
-	if buttonID == "cancel" {
-		a.clearDialog()
-		return nil
-	}
-	switch a.state.Dialog.Kind {
-	case DialogConfirmRemove:
-		path := a.state.Dialog.Path
-		a.clearDialog()
-		return a.removeWorktree(path)
-	case DialogConfirmCreateBranch:
-		path := a.state.Dialog.Path
-		branchName := a.state.Dialog.Branch
-		a.clearDialog()
-		return a.addWorktree(path, branchName, true)
-	case DialogConfirmDeleteBranch:
-		branchName := a.state.Dialog.Branch
-		a.clearDialog()
-		return a.deleteBranch(branchName)
-	case DialogConfirmDeleteAllBranches:
-		a.clearDialog()
-		return a.deleteAllBranches()
-	default:
-		return nil
-	}
-}
-
 // HandleMessage applies a completed Command's Message to state and may return
 // the next Command to chain. It is an inspectable switch so app tests can drive
 // it directly.
@@ -136,26 +104,17 @@ func (a *App) HandleMessage(message Message) Command {
 		a.markLoadingDone(msg.LoadingID)
 		a.appendStatus(StatusSuccess, "fetch complete")
 		return a.loadBranches()
-	case BranchCheckedMessage:
-		if msg.Err != nil {
-			a.clearLoadingEntry(msg.LoadingID)
-			a.appendStatus(StatusError, msg.Err.Error())
-			return nil
-		}
+	case BranchExistsMessage:
 		a.markLoadingDone(msg.LoadingID)
-		if msg.Exists {
-			return a.addWorktree(msg.Path, msg.Branch, false)
-		}
-		a.state.Dialog = DialogState{
-			Active:      true,
-			Title:       "Branch does not exist",
-			Description: fmt.Sprintf("Create a new branch named %q?", msg.Branch),
-			Buttons:     []DialogButton{{ID: "confirm", Label: "Create"}, {ID: "cancel", Label: "Cancel"}},
-			FocusedID:   "confirm",
-			Kind:        DialogConfirmCreateBranch,
-			Path:        msg.Path,
-			Branch:      msg.Branch,
-		}
+		return a.addWorktree(msg.Path, msg.Branch, false)
+	case BranchAbsentMessage:
+		// The branch is missing; the active screen reacts (via OnMessage) by
+		// offering to create it. No state change beyond resolving the check.
+		a.markLoadingDone(msg.LoadingID)
+		return nil
+	case BranchCheckFailedMessage:
+		a.clearLoadingEntry(msg.LoadingID)
+		a.appendStatus(StatusError, msg.Err.Error())
 		return nil
 	case WorktreeAddedMessage:
 		if msg.Err != nil {
