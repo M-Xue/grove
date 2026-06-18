@@ -14,6 +14,9 @@ const (
 type Item struct {
 	ID    string
 	Label string
+	// Color is an optional ANSI escape applied to the label when the item is
+	// not the current selection. Empty means default terminal colour.
+	Color string
 }
 
 type Model struct {
@@ -82,6 +85,8 @@ func (m *Model) View(height int) string {
 		line := m.items[i].Label
 		if i == m.selected {
 			line = selectionColor + line + resetColor
+		} else if m.items[i].Color != "" {
+			line = m.items[i].Color + line + resetColor
 		}
 		lines = append(lines, line)
 	}

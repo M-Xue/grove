@@ -191,6 +191,40 @@ func TestServiceRemoveReturnsRunnerError(t *testing.T) {
 	}
 }
 
+func TestServicePruneForceRemovesWorktree(t *testing.T) {
+	runner := &stubRunner{
+		results: map[string]commandResult{
+			commandKey("git", "worktree", "remove", "--force", "../feature-auth"): {},
+		},
+	}
+	service := NewService(runner)
+
+	if err := service.Prune("../feature-auth"); err != nil {
+		t.Fatalf("Prune returned error: %v", err)
+	}
+
+	want := commandCall{name: "git", args: []string{"worktree", "remove", "--force", "../feature-auth"}}
+	if len(runner.calls) != 1 || !reflect.DeepEqual(runner.calls[0], want) {
+		t.Fatalf("unexpected call: got %+v want %+v", runner.calls, want)
+	}
+}
+
+func TestServicePruneRequiresPath(t *testing.T) {
+	runner := &stubRunner{}
+	service := NewService(runner)
+
+	err := service.Prune("  ")
+	if err == nil {
+		t.Fatal("expected error for missing path")
+	}
+	if !errors.Is(err, ErrWorktreePathRequired) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(runner.calls) != 0 {
+		t.Fatal("runner should not be called for invalid input")
+	}
+}
+
 func TestServiceBranchExistsReturnsTrueForExistingBranch(t *testing.T) {
 	runner := &stubRunner{
 		results: map[string]commandResult{
@@ -320,6 +354,56 @@ func TestServiceListSupportsDetachedHead(t *testing.T) {
 	}
 	if got[0].Branch != "detached" {
 		t.Fatalf("expected detached branch label, got %q", got[0].Branch)
+	}
+}
+
+func TestServiceListMarksStaleWorktreesWithoutInspectingPath(t *testing.T) {
+	runner := &stubRunner{
+		results: map[string]commandResult{
+			commandKey("git", "worktree", "list", "--porcelain"): {
+				output: []byte("worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /repo-gone\nHEAD def456\nbranch refs/heads/feature/old\nprunable gitdir file points to non-existent location\n"),
+			},
+			commandKey("git", "-C", "/repo", "log", "-1", "--pretty=%s"): {
+				output: []byte("Initial commit\n"),
+			},
+			commandKey("git", "-C", "/repo", "status", "--porcelain"): {
+				output: []byte(""),
+			},
+		},
+	}
+
+	service := NewService(runner)
+	got, err := service.List()
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+
+	want := []Info{
+		{
+			Path:        "/repo",
+			Branch:      "main",
+			CommitLabel: "Initial commit",
+			CommitHash:  "abc123",
+		},
+		{
+			Path:       "/repo-gone",
+			Branch:     "feature/old",
+			CommitHash: "def456",
+			Stale:      true,
+		},
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected worktrees: got %#v want %#v", got, want)
+	}
+
+	// The stale worktree's path must never be inspected with git -C.
+	for _, call := range runner.calls {
+		for i, arg := range call.args {
+			if arg == "-C" && i+1 < len(call.args) && call.args[i+1] == "/repo-gone" {
+				t.Fatalf("unexpected git command against stale worktree path: %+v", call)
+			}
+		}
 	}
 }
 

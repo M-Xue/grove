@@ -94,3 +94,9 @@ type WorktreeRemovedMessage struct {
 	Path      string
 	Err       error
 }
+
+type WorktreePrunedMessage struct {
+	LoadingID string
+	Path      string
+	Err       error
+}
