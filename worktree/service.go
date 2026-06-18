@@ -2,7 +2,11 @@ package worktree
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 )
 
 var (
@@ -19,6 +23,10 @@ type Info struct {
 	// Stale reports that git considers the worktree prunable, typically
 	// because its working directory no longer exists on disk.
 	Stale bool
+	// CreatedAt is when the worktree was added, derived from its git
+	// administrative files. It is the zero time when it cannot be determined
+	// (e.g. for stale worktrees, whose files no longer exist on disk).
+	CreatedAt time.Time
 }
 
 type Runner interface {
@@ -36,11 +44,14 @@ type Service interface {
 
 type service struct {
 	runner Runner
+	// stat resolves filesystem metadata; injectable so worktree creation
+	// times can be exercised in tests without real git directories.
+	stat func(name string) (os.FileInfo, error)
 }
 
 // NewService returns a worktree Service backed by the injected command runner.
 func NewService(runner Runner) Service {
-	return service{runner: runner}
+	return service{runner: runner, stat: os.Stat}
 }
 
 func (s service) Add(path, branch string) error {
@@ -140,10 +151,54 @@ func (s service) List() ([]Info, error) {
 			CommitLabel:           commitLabel,
 			CommitHash:            entry.commitHash,
 			HasUncommittedChanges: dirty,
+			CreatedAt:             s.createdAt(entry.path),
+		})
+	}
+
+	// git always lists the main worktree first, so worktrees[0] is the main
+	// worktree; pin it to the top and order only the linked worktrees beneath
+	// it, oldest first. The sort is stable so entries that compare equal keep
+	// git's ordering. Worktrees with an undeterminable creation time (zero
+	// value, e.g. stale ones) sort below the dated entries rather than above
+	// them, since the zero time would otherwise read as the oldest.
+	if len(worktrees) > 1 {
+		rest := worktrees[1:]
+		sort.SliceStable(rest, func(i, j int) bool {
+			a, b := rest[i].CreatedAt, rest[j].CreatedAt
+			if a.IsZero() != b.IsZero() {
+				return b.IsZero()
+			}
+			return a.Before(b)
 		})
 	}
 
 	return worktrees, nil
+}
+
+// createdAt reports when the worktree at path was added. Git does not expose
+// this directly, so it reads the mod time of the worktree's administrative
+// `gitdir` file, which git writes once at `git worktree add` time and rarely
+// rewrites afterward. The main worktree has no such file, so it falls back to
+// the git directory itself. Any failure yields the zero time rather than an
+// error, so an unknown creation time never aborts the whole listing.
+func (s service) createdAt(path string) time.Time {
+	output, err := s.runner.CombinedOutput("git", "-C", path, "rev-parse", "--absolute-git-dir")
+	if err != nil {
+		return time.Time{}
+	}
+	gitDir := strings.TrimSpace(string(output))
+	if gitDir == "" {
+		return time.Time{}
+	}
+
+	info, err := s.stat(filepath.Join(gitDir, "gitdir"))
+	if err != nil {
+		info, err = s.stat(gitDir)
+		if err != nil {
+			return time.Time{}
+		}
+	}
+	return info.ModTime()
 }
 
 func (s service) commitLabel(path string) (string, error) {
