@@ -95,8 +95,7 @@ type WorktreeRemovedMessage struct {
 	Err       error
 }
 
-type WorktreePrunedMessage struct {
+type WorktreesPrunedMessage struct {
 	LoadingID string
-	Path      string
 	Err       error
 }

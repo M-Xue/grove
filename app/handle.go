@@ -136,7 +136,7 @@ func (a *App) HandleMessage(message Message) Command {
 		a.state.Screen = ScreenChange
 		a.appendStatus(StatusSuccess, "worktree removed")
 		return a.loadWorktrees()
-	case WorktreePrunedMessage:
+	case WorktreesPrunedMessage:
 		if msg.Err != nil {
 			a.clearLoadingEntry(msg.LoadingID)
 			a.appendStatus(StatusError, msg.Err.Error())
@@ -144,7 +144,7 @@ func (a *App) HandleMessage(message Message) Command {
 		}
 		a.markLoadingDone(msg.LoadingID)
 		a.state.Screen = ScreenChange
-		a.appendStatus(StatusSuccess, "worktree pruned")
+		a.appendStatus(StatusSuccess, "stale worktrees pruned")
 		return a.loadWorktrees()
 	default:
 		return nil

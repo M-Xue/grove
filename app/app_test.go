@@ -130,36 +130,32 @@ func TestRemoveWorktreeReturnsCommand(t *testing.T) {
 	}
 }
 
-func TestPruneWorktreeRequiresSelection(t *testing.T) {
+func TestPruneWorktreesReportsWhenNothingStale(t *testing.T) {
 	a := New(Services{})
-	if cmd := a.PruneWorktree(""); cmd != nil {
-		t.Fatalf("expected nil command, got %#v", cmd)
+	a.HandleMessage(WorktreesLoadedMessage{Worktrees: []worktree.Info{{Path: "/repo", Stale: false}}})
+	if cmd := a.PruneWorktrees(); cmd != nil {
+		t.Fatalf("expected nil command when nothing is stale, got %#v", cmd)
+	}
+	if len(a.State().Loading) != 0 {
+		t.Fatalf("expected no loading entry, got %#v", a.State().Loading)
 	}
 	if len(a.State().Statuses) != 1 {
 		t.Fatalf("expected one status, got %d", len(a.State().Statuses))
 	}
 }
 
-func TestPruneWorktreeRejectsNonStaleWorktree(t *testing.T) {
+func TestPruneWorktreesReturnsCommandWhenStaleExists(t *testing.T) {
 	a := New(Services{})
-	a.HandleMessage(WorktreesLoadedMessage{Worktrees: []worktree.Info{{Path: "/repo", Stale: false}}})
-	if cmd := a.PruneWorktree("/repo"); cmd != nil {
-		t.Fatalf("expected nil command for non-stale worktree, got %#v", cmd)
-	}
-	if len(a.State().Loading) != 0 {
-		t.Fatalf("expected no loading entry, got %#v", a.State().Loading)
-	}
-}
-
-func TestPruneWorktreeReturnsCommandForStaleWorktree(t *testing.T) {
-	a := New(Services{})
-	a.HandleMessage(WorktreesLoadedMessage{Worktrees: []worktree.Info{{Path: "/repo-gone", Stale: true}}})
-	cmd := a.PruneWorktree("/repo-gone")
+	a.HandleMessage(WorktreesLoadedMessage{Worktrees: []worktree.Info{
+		{Path: "/repo", Stale: false},
+		{Path: "/repo-gone", Stale: true},
+	}})
+	cmd := a.PruneWorktrees()
 	if cmd == nil {
 		t.Fatal("expected a prune command")
 	}
-	if len(a.State().Loading) != 1 || a.State().Loading[0].Message != "pruning worktree" {
-		t.Fatalf("expected prune-worktree loading entry, got %#v", a.State().Loading)
+	if len(a.State().Loading) != 1 || a.State().Loading[0].Message != "pruning stale worktrees" {
+		t.Fatalf("expected prune loading entry, got %#v", a.State().Loading)
 	}
 }
 

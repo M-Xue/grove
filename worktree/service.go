@@ -31,7 +31,7 @@ type Service interface {
 	BranchExists(branch string) (bool, error)
 	List() ([]Info, error)
 	Remove(path string) error
-	Prune(path string) error
+	Prune() error
 }
 
 type service struct {
@@ -73,16 +73,10 @@ func (s service) Remove(path string) error {
 	return err
 }
 
-// Prune removes a stale worktree's administrative files. It force-removes the
-// entry so a worktree whose working directory has already been deleted is
-// cleaned up rather than rejected for failing validation.
-func (s service) Prune(path string) error {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return ErrWorktreePathRequired
-	}
-
-	_, err := s.runner.CombinedOutput("git", "worktree", "remove", "--force", path)
+// Prune removes the administrative files of every stale worktree, i.e. those
+// whose working directory no longer exists on disk.
+func (s service) Prune() error {
+	_, err := s.runner.CombinedOutput("git", "worktree", "prune")
 	return err
 }
 

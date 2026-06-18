@@ -191,37 +191,34 @@ func TestServiceRemoveReturnsRunnerError(t *testing.T) {
 	}
 }
 
-func TestServicePruneForceRemovesWorktree(t *testing.T) {
+func TestServicePruneRunsGitWorktreePrune(t *testing.T) {
 	runner := &stubRunner{
 		results: map[string]commandResult{
-			commandKey("git", "worktree", "remove", "--force", "../feature-auth"): {},
+			commandKey("git", "worktree", "prune"): {},
 		},
 	}
 	service := NewService(runner)
 
-	if err := service.Prune("../feature-auth"); err != nil {
+	if err := service.Prune(); err != nil {
 		t.Fatalf("Prune returned error: %v", err)
 	}
 
-	want := commandCall{name: "git", args: []string{"worktree", "remove", "--force", "../feature-auth"}}
+	want := commandCall{name: "git", args: []string{"worktree", "prune"}}
 	if len(runner.calls) != 1 || !reflect.DeepEqual(runner.calls[0], want) {
 		t.Fatalf("unexpected call: got %+v want %+v", runner.calls, want)
 	}
 }
 
-func TestServicePruneRequiresPath(t *testing.T) {
-	runner := &stubRunner{}
+func TestServicePruneReturnsRunnerError(t *testing.T) {
+	runner := &stubRunner{
+		results: map[string]commandResult{
+			commandKey("git", "worktree", "prune"): {err: errors.New("git failed")},
+		},
+	}
 	service := NewService(runner)
 
-	err := service.Prune("  ")
-	if err == nil {
-		t.Fatal("expected error for missing path")
-	}
-	if !errors.Is(err, ErrWorktreePathRequired) {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(runner.calls) != 0 {
-		t.Fatal("runner should not be called for invalid input")
+	if err := service.Prune(); err == nil {
+		t.Fatal("expected runner error")
 	}
 }
 
