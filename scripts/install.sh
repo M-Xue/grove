@@ -30,11 +30,11 @@ fi
 
 case "$TARGET_SHELL" in
     zsh)
-        init_line="eval \"\$($BINARY_PATH shell-init zsh)\""
+        init_shell="zsh"
         config_path="$HOME/.zshrc"
         ;;
     bash|sh)
-        init_line="eval \"\$($BINARY_PATH shell-init bash)\""
+        init_shell="bash"
         config_path="$HOME/.bashrc"
         ;;
     *)
@@ -43,6 +43,16 @@ case "$TARGET_SHELL" in
         exit 1
         ;;
 esac
+
+# grove owns this file outright: rewrite it on every run. It evaluates the
+# wrapper straight from the binary, so the binary stays the single source of
+# truth and the rc file only ever needs the stable source line below.
+data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/grove"
+init_file="$data_dir/init.sh"
+mkdir -p "$data_dir"
+printf 'eval "$(%s shell-init %s)"\n' "$BINARY_PATH" "$init_shell" > "$init_file"
+
+source_line="[ -f \"$init_file\" ] && . \"$init_file\""
 
 append_line_once() {
     target_file=$1
@@ -58,5 +68,5 @@ append_line_once() {
     printf '\n%s\n' "$line" >> "$target_file"
 }
 
-append_line_once "$config_path" "$init_line"
-printf '%s\n' "installed grove to $BINARY_PATH and updated $config_path"
+append_line_once "$config_path" "$source_line"
+printf '%s\n' "installed grove to $BINARY_PATH, wrote $init_file, and updated $config_path"

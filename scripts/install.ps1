@@ -19,10 +19,17 @@ if (-not (Test-Path $ProfilePath)) {
     New-Item -ItemType File -Force -Path $ProfilePath | Out-Null
 }
 
-$InitBlock = & $BinaryPath shell-init powershell
+# grove owns this file outright: rewrite it on every run. It re-evaluates the
+# wrapper straight from the binary, so the binary stays the single source of
+# truth and $PROFILE only ever needs the stable source line below.
+$InitFile = Join-Path $InstallDir "init.ps1"
+Set-Content -Path $InitFile -Value "Invoke-Expression (& `"$BinaryPath`" shell-init powershell)"
+
+$SourceLine = ". `"$InitFile`""
 $profileContent = Get-Content -Raw -Path $ProfilePath
-if (-not $profileContent.Contains('Set-Alias grove Invoke-Grove')) {
-    Add-Content -Path $ProfilePath -Value "`r`n$InitBlock"
+if ($null -eq $profileContent) { $profileContent = '' }
+if (-not $profileContent.Contains($SourceLine)) {
+    Add-Content -Path $ProfilePath -Value "`r`n$SourceLine"
 }
 
-Write-Output "installed grove to $BinaryPath and updated $ProfilePath"
+Write-Output "installed grove to $BinaryPath, wrote $InitFile, and updated $ProfilePath"

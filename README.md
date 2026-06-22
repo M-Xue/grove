@@ -44,7 +44,7 @@ sh scripts/install.sh bash
 
 If you omit the argument, the script falls back to your `$SHELL` value. The script itself still runs under `sh`.
 
-This builds `grove`, installs it to `~/.local/bin/grove`, and updates either `~/.zshrc` or `~/.bashrc`.
+This builds `grove`, installs it to `~/.local/bin/grove`, writes the shell wrapper to `~/.local/share/grove/init.sh` (honoring `$XDG_DATA_HOME`), and adds a single line sourcing that file to either `~/.zshrc` or `~/.bashrc`. The wrapper is re-evaluated from the binary on each shell start, so updating grove never requires editing your rc file again.
 
 PowerShell:
 
@@ -52,7 +52,7 @@ PowerShell:
 powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
 ```
 
-This builds `grove.exe`, installs it to `$HOME\AppData\Local\Programs\grove\grove.exe`, and updates `$PROFILE`.
+This builds `grove.exe`, installs it to `$HOME\AppData\Local\Programs\grove\grove.exe`, writes the shell wrapper to `…\Programs\grove\init.ps1`, and adds a single line sourcing that file to `$PROFILE`. The wrapper is re-evaluated from the binary on each shell start, so updating grove never requires editing your profile again.
 
 ### Build The Binary
 
