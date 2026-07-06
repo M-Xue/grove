@@ -50,3 +50,34 @@ Reload your shell config afterwards (`source ~/.zshrc`, `. ~/.bashrc`, or `. $PR
 ### Updating
 
 The wrapper is re-evaluated from the binary on each shell start, so your rc file / `$PROFILE` never needs editing again. To update after pulling a new version, just re-run the installer for your shell. It rebuilds the binary into the install location and is idempotent, so it won't duplicate the source line in your config.
+
+### Uninstall
+
+grove only ever writes to a couple of fixed locations, so removing it by hand is straightforward: delete the directories it installed to and remove the single source line from your shell config.
+
+zsh and bash:
+
+```bash
+rm ~/.local/bin/grove
+rm -rf ~/.local/share/grove
+```
+
+Then delete the grove source line from `~/.zshrc` (zsh) or `~/.bashrc` (bash). It looks like this, with your home directory expanded to an absolute path:
+
+```sh
+[ -f "$HOME/.local/share/grove/init.sh" ] && . "$HOME/.local/share/grove/init.sh"
+```
+
+PowerShell:
+
+```powershell
+Remove-Item -Recurse -Force "$HOME\AppData\Local\Programs\grove"
+```
+
+Then delete the grove source line from your profile at `$PROFILE`. It looks like this, with your home directory expanded to an absolute path:
+
+```powershell
+. "$HOME\AppData\Local\Programs\grove\init.ps1"
+```
+
+Reload your shell (or open a new session) afterwards so the wrapper is no longer defined.
