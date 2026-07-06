@@ -47,11 +47,11 @@ This builds `grove.exe`, installs it to `$HOME\AppData\Local\Programs\grove\grov
 
 Reload your shell config afterwards (`source ~/.zshrc`, `. ~/.bashrc`, or `. $PROFILE`).
 
-### Updating
+## Updating
 
 The wrapper is re-evaluated from the binary on each shell start, so your rc file / `$PROFILE` never needs editing again. To update after pulling a new version, just re-run the installer for your shell. It rebuilds the binary into the install location and is idempotent, so it won't duplicate the source line in your config.
 
-### Uninstall
+## Uninstall
 
 grove only ever writes to a couple of fixed locations, so removing it by hand is straightforward: delete the directories it installed to and remove the single source line from your shell config.
 
