@@ -12,7 +12,7 @@ branches. Its architecture is layered:
 
 This refactor has **two goals**:
 
-1. **Pay down structural debt** — thin out `main.go`, remove duplication (command runner), fix naming inconsistencies (`manager` remnants, import-alias collisions), relocate startup-only logic (`InRepo`, shell-init, arg parsing), and split pure helpers into their own tested files.
+1. **Pay down structural debt** — thin out `main.go`, remove duplication (command runner), fix naming inconsistencies (`manager` remnants, import-alias collisions), relocate startup-only logic (`InRepo`, arg parsing), and split pure helpers into their own tested files.
 2. **Re-architect the `app`↔`ui` boundary** — replace the effect/result loop with a thinner, Bubble-Tea-decoupled **command/message** system; introduce a **per-screen key-binding registry**; **invert dialog ownership** to the UI; and wrap `app` behind **per-screen consumer interfaces**.
 
 ### Guiding principles (preserve these throughout)
@@ -30,21 +30,24 @@ Phases **A → B → C** must run in order. Within **Phase A** steps are largely
 
 ## Phase A — Structural cleanups (low risk, behavior-preserving)
 
-### A1. Extract shell-init into its own package
+### A1. ~~Extract shell-init into its own package~~ (SUPERSEDED — shell-init removed from the binary)
 
-**Goal:** thin `main.go`; keep shell-init *in the binary* (it must self-locate via `os.Executable()` and stay versioned with the binary — do **not** move it into static script files), but isolate it in a decoupled package.
+> **Reversed 2026-07-06.** Shell-init logic no longer lives in the binary at all. The
+> `shellinit` package was deleted, along with the `grove shell-init <shell>` subcommand
+> (`KindShellInit` in `cli`, the branch in `main.go`, and their tests). The cd-wrapper is
+> now generated entirely by the install scripts (`scripts/install.sh`, `scripts/install.ps1`),
+> which write the wrapper straight into `init.sh` / `init.ps1` with the binary path baked in
+> at install time. This trades the old "versioned-with-the-binary / self-locates via
+> `os.Executable()`" property for keeping all install concerns in the install scripts.
+> The original A1 plan (kept below for history) is no longer applicable.
 
-**Actions:**
+**Goal (original, superseded):** thin `main.go`; keep shell-init *in the binary* (it must self-locate via `os.Executable()` and stay versioned with the binary — do **not** move it into static script files), but isolate it in a decoupled package.
+
+**Actions (original, superseded):**
 - Create package `shellinit` (e.g. `shellinit/shellinit.go`).
 - Move `shellInitScript`, `shellQuote`, and `isSupportedShell` (the shell-name validation) out of `main.go` into it.
 - Expose a minimal API, e.g. `shellinit.Script(shell, binaryPath string) (string, error)` and `shellinit.IsSupported(shell string) bool`.
 - Keep `os.Executable()` resolution in the caller (`cli`/`main`), passing the path in — the package stays pure (no process/global state).
-
-**Files:** new `shellinit/`; edits to `main.go` (later moved behind `cli` in A2).
-
-**Depends on:** none.
-
-**Acceptance:** `grove shell-init bash|zsh|powershell` output is byte-identical to before; `shellinit` is imported only by `cli`/`main`; existing `TestShellInitScript` (moved) passes; no other package imports `shellinit`.
 
 ### A2. Extract argument parsing into a `cli` package
 
@@ -52,15 +55,17 @@ Phases **A → B → C** must run in order. Within **Phase A** steps are largely
 
 **Actions:**
 - Create package `cli`.
-- Move `parseCommand`, `parseInitialScreen`, `command`/`commandKind` types into it; have it own the `shell-init` subcommand dispatch and call `shellinit` (A1).
+- Move `parseInitialScreen` and the `Command` type into it.
 - `cli` depends on `app` only for the `app.ScreenID` type it returns.
-- `main.go` becomes: `cli.Parse(os.Args[1:])` → switch on command kind → (`shellinit` path | run TUI).
+- `main.go` becomes: `cli.Parse(os.Args[1:])` → construct → run TUI → print path.
+
+  *(Update: with A1 superseded, `cli` no longer owns a `shell-init` subcommand or a command-`Kind` switch — `Parse` just validates the initial-screen flags and returns a `Command{Screen}`.)*
 
 **Files:** new `cli/`; `main.go` slimmed; move `main_test.go` parsing tests into `cli`.
 
-**Depends on:** A1.
+**Depends on:** none (A1 no longer applies).
 
-**Acceptance:** `main.go` contains only process wiring (parse → branch → construct → run → print path); all moved tests pass under `cli`; flag/behavior unchanged.
+**Acceptance:** `main.go` contains only process wiring (parse → construct → run → print path); all moved tests pass under `cli`; flag/behavior unchanged.
 
 ### A3. Resolve the `branch` import-alias collision via variable renames
 
@@ -295,8 +300,8 @@ These steps form one design ("UI owns presentation + dispatch; `app` owns operat
 ## Dependency graph (quick reference)
 
 ```
-A1 shellinit ─┐
-A2 cli  ──────┘ (A2 needs A1)
+A1 shellinit  (SUPERSEDED — removed from binary; now in install scripts)
+A2 cli                (independent; no longer needs A1)
 A3 var renames        (independent)
 A4 unified runner ─┬─ A5 InRepo
                    └─ A6 manager→service
@@ -315,7 +320,7 @@ C1 UI tests         (after all of B)
 
 ## Done-criteria for the whole project
 
-- `main.go` is process-wiring only; `shellinit` and `cli` are isolated and narrowly imported.
+- `main.go` is process-wiring only; `cli` is isolated and narrowly imported. (Shell-init is no longer in the binary — it's generated by the install scripts; see the superseded A1.)
 - One generic, injected, context-aware command runner; no duplication; `InRepo` is a standalone startup check.
 - `worktree` uses `service` naming throughout; pure helpers live in cohesive, tested files.
 - `app` imports no Bubble Tea, contains no UI strings, and exposes operations + a command/message API.

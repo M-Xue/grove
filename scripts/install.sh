@@ -30,11 +30,9 @@ fi
 
 case "$TARGET_SHELL" in
     zsh)
-        init_shell="zsh"
         config_path="$HOME/.zshrc"
         ;;
     bash|sh)
-        init_shell="bash"
         config_path="$HOME/.bashrc"
         ;;
     *)
@@ -44,13 +42,25 @@ case "$TARGET_SHELL" in
         ;;
 esac
 
-# grove owns this file outright: rewrite it on every run. It evaluates the
-# wrapper straight from the binary, so the binary stays the single source of
-# truth and the rc file only ever needs the stable source line below.
+# grove owns this file outright: rewrite it on every run. It defines the shell
+# wrapper that turns the path grove prints on stdout into a directory change,
+# so the rc file only ever needs the stable source line below.
 data_dir="${XDG_DATA_HOME:-$HOME/.local/share}/grove"
 init_file="$data_dir/init.sh"
 mkdir -p "$data_dir"
-printf 'eval "$(%s shell-init %s)"\n' "$BINARY_PATH" "$init_shell" > "$init_file"
+cat > "$init_file" <<EOF
+grove() {
+    local output
+    output="\$("$BINARY_PATH" "\$@")"
+    local status=\$?
+    if [ \$status -ne 0 ]; then
+        return \$status
+    fi
+    if [ -n "\$output" ]; then
+        cd "\$output" || return 1
+    fi
+}
+EOF
 
 source_line="[ -f \"$init_file\" ] && . \"$init_file\""
 

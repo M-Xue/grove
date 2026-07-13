@@ -19,11 +19,30 @@ if (-not (Test-Path $ProfilePath)) {
     New-Item -ItemType File -Force -Path $ProfilePath | Out-Null
 }
 
-# grove owns this file outright: rewrite it on every run. It re-evaluates the
-# wrapper straight from the binary, so the binary stays the single source of
-# truth and $PROFILE only ever needs the stable source line below.
+# grove owns this file outright: rewrite it on every run. It defines the shell
+# wrapper that turns the path grove prints on stdout into a directory change,
+# so $PROFILE only ever needs the stable source line below.
 $InitFile = Join-Path $InstallDir "init.ps1"
-Set-Content -Path $InitFile -Value "Invoke-Expression (& `"$BinaryPath`" shell-init powershell)"
+$InitContent = @"
+function Invoke-Grove {
+    param(
+        [Parameter(ValueFromRemainingArguments = `$true)]
+        [string[]]`$Arguments
+    )
+
+    `$output = & "$BinaryPath" @Arguments
+    if (`$LASTEXITCODE -ne 0) {
+        return `$LASTEXITCODE
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace(`$output)) {
+        Set-Location `$output
+    }
+}
+
+Set-Alias grove Invoke-Grove
+"@
+Set-Content -Path $InitFile -Value $InitContent
 
 $SourceLine = ". `"$InitFile`""
 $profileContent = Get-Content -Raw -Path $ProfilePath

@@ -9,7 +9,6 @@ import (
 	"github.com/M-Xue/grove/cli"
 	"github.com/M-Xue/grove/command"
 	"github.com/M-Xue/grove/repo"
-	"github.com/M-Xue/grove/shellinit"
 	"github.com/M-Xue/grove/ui"
 	"github.com/M-Xue/grove/worktree"
 	tea "github.com/charmbracelet/bubbletea"
@@ -21,21 +20,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error running grove: %v\n", err)
 		os.Exit(1)
 	}
-	if cmd.Kind == cli.KindShellInit {
-		execPath, err := os.Executable()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "error running grove: %v\n", err)
-			os.Exit(1)
-		}
-		script, err := shellinit.Script(cmd.Shell, execPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "error running grove: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Print(script)
-		return
-	}
-
 	runner := command.New()
 	if err := repo.EnsureInRepo(runner); err != nil {
 		fmt.Fprintf(os.Stderr, "error running grove: %v\n", err)
