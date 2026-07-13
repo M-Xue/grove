@@ -10,6 +10,7 @@ type listEntry struct {
 	branch     string
 	commitHash string
 	prunable   bool
+	locked     bool
 }
 
 func parseWorktreeList(output []byte) ([]listEntry, error) {
@@ -45,6 +46,8 @@ func parseWorktreeBlock(block string) (listEntry, error) {
 			entry.branch = strings.TrimSpace(strings.TrimPrefix(line, "branch "))
 		case line == "prunable" || strings.HasPrefix(line, "prunable "):
 			entry.prunable = true
+		case line == "locked" || strings.HasPrefix(line, "locked "):
+			entry.locked = true
 		}
 	}
 

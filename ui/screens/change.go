@@ -60,6 +60,10 @@ func (s *ChangeScreen) Sync(state app.State) {
 		if worktree.Stale {
 			label += " [stale]"
 			color = staleColor
+		} else if worktree.Locked {
+			// A locked worktree is a deliberate state and often still usable, so
+			// it is labelled but kept at its normal colour rather than dimmed.
+			label += " [locked]"
 		}
 		items = append(items, selectlist.Item{ID: worktree.Path, Label: label, Color: color})
 		s.worktrees = append(s.worktrees, appWorktree{id: worktree.Path, label: label, color: color, stale: worktree.Stale})

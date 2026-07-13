@@ -22,6 +22,21 @@ func (f fakeFileInfo) ModTime() time.Time { return f.modTime }
 func (f fakeFileInfo) IsDir() bool        { return false }
 func (f fakeFileInfo) Sys() any           { return nil }
 
+// existingStat builds a stat func for List tests where every worktree directory
+// is present on disk. modTimes supplies mod times for specific administrative
+// paths (used to exercise creation-time ordering); any other path is reported
+// as an existing file with the zero mod time, so List's on-disk existence check
+// treats the fixture worktrees as reachable. Tests that need a path to read as
+// missing supply their own stat instead.
+func existingStat(modTimes map[string]time.Time) func(name string) (fs.FileInfo, error) {
+	return func(name string) (fs.FileInfo, error) {
+		if t, ok := modTimes[name]; ok {
+			return fakeFileInfo{modTime: t}, nil
+		}
+		return fakeFileInfo{}, nil
+	}
+}
+
 type commandCall struct {
 	name string
 	args []string
@@ -313,8 +328,8 @@ func TestServiceListReturnsStructuredWorktrees(t *testing.T) {
 		},
 	}
 
-	service := NewService(runner)
-	got, err := service.List()
+	svc := service{runner: runner, stat: existingStat(nil)}
+	got, err := svc.List()
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -367,15 +382,7 @@ func TestServiceListPinsMainWorktreeThenOrdersRestOldestFirst(t *testing.T) {
 		filepath.Join("/new/.git", "gitdir"):  time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC),
 		filepath.Join("/old/.git", "gitdir"):  time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
-	svc := service{
-		runner: runner,
-		stat: func(name string) (fs.FileInfo, error) {
-			if t, ok := modTimes[name]; ok {
-				return fakeFileInfo{modTime: t}, nil
-			}
-			return nil, errors.New("not found")
-		},
-	}
+	svc := service{runner: runner, stat: existingStat(modTimes)}
 
 	got, err := svc.List()
 	if err != nil {
@@ -413,15 +420,7 @@ func TestServiceListSortsUndeterminableCreationTimesLast(t *testing.T) {
 		filepath.Join("/main/.git", "gitdir"):  time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 		filepath.Join("/dated/.git", "gitdir"): time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 	}
-	svc := service{
-		runner: runner,
-		stat: func(name string) (fs.FileInfo, error) {
-			if t, ok := modTimes[name]; ok {
-				return fakeFileInfo{modTime: t}, nil
-			}
-			return nil, errors.New("not found")
-		},
-	}
+	svc := service{runner: runner, stat: existingStat(modTimes)}
 
 	got, err := svc.List()
 	if err != nil {
@@ -454,8 +453,8 @@ func TestServiceListSupportsDetachedHead(t *testing.T) {
 		},
 	}
 
-	service := NewService(runner)
-	got, err := service.List()
+	svc := service{runner: runner, stat: existingStat(nil)}
+	got, err := svc.List()
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -483,8 +482,8 @@ func TestServiceListMarksStaleWorktreesWithoutInspectingPath(t *testing.T) {
 		},
 	}
 
-	service := NewService(runner)
-	got, err := service.List()
+	svc := service{runner: runner, stat: existingStat(nil)}
+	got, err := svc.List()
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -518,6 +517,183 @@ func TestServiceListMarksStaleWorktreesWithoutInspectingPath(t *testing.T) {
 	}
 }
 
+func TestServiceListMarksLockedWorktreeLockedNotStale(t *testing.T) {
+	// A locked worktree whose working directory is gone is reported by git as
+	// "locked" but never "prunable" (locking protects it from pruning). It must
+	// be surfaced as locked, not stale, and never inspected with git -C, which
+	// would fail with exit status 128 and abort the whole listing.
+	runner := &stubRunner{
+		results: map[string]commandResult{
+			commandKey("git", "worktree", "list", "--porcelain"): {
+				output: []byte("worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /repo-gone\nHEAD def456\nbranch refs/heads/feature/locked\nlocked\n"),
+			},
+			commandKey("git", "-C", "/repo", "log", "-1", "--pretty=%s"): {
+				output: []byte("Initial commit\n"),
+			},
+			commandKey("git", "-C", "/repo", "status", "--porcelain"): {
+				output: []byte(""),
+			},
+			commandKey("git", "-C", "/repo", "rev-parse", "--absolute-git-dir"): {
+				output: []byte("/repo/.git\n"),
+			},
+		},
+	}
+
+	svc := service{
+		runner: runner,
+		stat: func(name string) (fs.FileInfo, error) {
+			if name == "/repo-gone" {
+				return nil, errors.New("no such file or directory")
+			}
+			return fakeFileInfo{modTime: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)}, nil
+		},
+	}
+
+	got, err := svc.List()
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+
+	want := []Info{
+		{
+			Path:        "/repo",
+			Branch:      "main",
+			CommitLabel: "Initial commit",
+			CommitHash:  "abc123",
+			CreatedAt:   time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			Path:       "/repo-gone",
+			Branch:     "feature/locked",
+			CommitHash: "def456",
+			Locked:     true,
+		},
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected worktrees: got %#v want %#v", got, want)
+	}
+
+	// The locked worktree's path must never be inspected with git -C.
+	for _, call := range runner.calls {
+		for i, arg := range call.args {
+			if arg == "-C" && i+1 < len(call.args) && call.args[i+1] == "/repo-gone" {
+				t.Fatalf("unexpected git command against locked worktree path: %+v", call)
+			}
+		}
+	}
+}
+
+func TestServiceListMarksMissingUnannotatedWorktreeStale(t *testing.T) {
+	// A worktree whose working directory is gone but which git annotates neither
+	// "prunable" nor "locked" (e.g. a git version predating the prunable
+	// annotation) must still be treated as stale rather than inspected with
+	// git -C, which would fail with exit status 128 and abort the whole listing.
+	runner := &stubRunner{
+		results: map[string]commandResult{
+			commandKey("git", "worktree", "list", "--porcelain"): {
+				output: []byte("worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /repo-gone\nHEAD def456\nbranch refs/heads/feature/old\n"),
+			},
+			commandKey("git", "-C", "/repo", "log", "-1", "--pretty=%s"): {
+				output: []byte("Initial commit\n"),
+			},
+			commandKey("git", "-C", "/repo", "status", "--porcelain"): {
+				output: []byte(""),
+			},
+			commandKey("git", "-C", "/repo", "rev-parse", "--absolute-git-dir"): {
+				output: []byte("/repo/.git\n"),
+			},
+		},
+	}
+
+	svc := service{
+		runner: runner,
+		stat: func(name string) (fs.FileInfo, error) {
+			if name == "/repo-gone" {
+				return nil, errors.New("no such file or directory")
+			}
+			return fakeFileInfo{modTime: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)}, nil
+		},
+	}
+
+	got, err := svc.List()
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+
+	want := []Info{
+		{
+			Path:        "/repo",
+			Branch:      "main",
+			CommitLabel: "Initial commit",
+			CommitHash:  "abc123",
+			CreatedAt:   time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		},
+		{
+			Path:       "/repo-gone",
+			Branch:     "feature/old",
+			CommitHash: "def456",
+			Stale:      true,
+		},
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected worktrees: got %#v want %#v", got, want)
+	}
+
+	// The missing worktree's path must never be inspected with git -C.
+	for _, call := range runner.calls {
+		for i, arg := range call.args {
+			if arg == "-C" && i+1 < len(call.args) && call.args[i+1] == "/repo-gone" {
+				t.Fatalf("unexpected git command against missing worktree path: %+v", call)
+			}
+		}
+	}
+}
+
+func TestServiceListMarksLockedWorktreeWithIntactDirectory(t *testing.T) {
+	// A locked worktree whose directory is still present is reachable, so it is
+	// inspected normally but still surfaced as locked rather than stale.
+	runner := &stubRunner{
+		results: map[string]commandResult{
+			commandKey("git", "worktree", "list", "--porcelain"): {
+				output: []byte("worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /pinned\nHEAD def456\nbranch refs/heads/pinned\nlocked\n"),
+			},
+			commandKey("git", "-C", "/repo", "log", "-1", "--pretty=%s"):   {output: []byte("Initial commit\n")},
+			commandKey("git", "-C", "/repo", "status", "--porcelain"):      {output: []byte("")},
+			commandKey("git", "-C", "/pinned", "log", "-1", "--pretty=%s"): {output: []byte("Pinned work\n")},
+			commandKey("git", "-C", "/pinned", "status", "--porcelain"):    {output: []byte("")},
+		},
+	}
+
+	svc := service{runner: runner, stat: existingStat(nil)}
+
+	got, err := svc.List()
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+
+	want := []Info{
+		{
+			Path:        "/repo",
+			Branch:      "main",
+			CommitLabel: "Initial commit",
+			CommitHash:  "abc123",
+		},
+		{
+			Path:        "/pinned",
+			Branch:      "pinned",
+			CommitLabel: "Pinned work",
+			CommitHash:  "def456",
+			Locked:      true,
+		},
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected worktrees: got %#v want %#v", got, want)
+	}
+}
+
 func TestServiceListIgnoresUntrackedFilesForDirtyState(t *testing.T) {
 	runner := &stubRunner{
 		results: map[string]commandResult{
@@ -533,8 +709,8 @@ func TestServiceListIgnoresUntrackedFilesForDirtyState(t *testing.T) {
 		},
 	}
 
-	service := NewService(runner)
-	got, err := service.List()
+	svc := service{runner: runner, stat: existingStat(nil)}
+	got, err := svc.List()
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}

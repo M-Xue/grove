@@ -23,6 +23,10 @@ type Info struct {
 	// Stale reports that git considers the worktree prunable, typically
 	// because its working directory no longer exists on disk.
 	Stale bool
+	// Locked reports that the worktree is locked (git worktree lock). A locked
+	// worktree is protected from pruning, so it is surfaced distinctly from a
+	// stale one even when its working directory is gone.
+	Locked bool
 	// CreatedAt is when the worktree was added, derived from its git
 	// administrative files. It is the zero time when it cannot be determined
 	// (e.g. for stale worktrees, whose files no longer exist on disk).
@@ -122,15 +126,21 @@ func (s service) List() ([]Info, error) {
 
 	worktrees := make([]Info, 0, len(entries))
 	for _, entry := range entries {
-		// Stale worktrees no longer have a working directory on disk, so
-		// running git inside their path would fail. Skip those lookups and
-		// surface the worktree as stale instead of aborting the whole list.
-		if entry.prunable {
+		// A worktree whose working directory is gone can no longer be inspected
+		// with git -C, which would fail with exit status 128 and abort the whole
+		// list. git usually flags these "prunable", but not always: a locked
+		// worktree stays unprunable even once deleted, and git versions before
+		// 2.36 omit the prunable annotation entirely. So we independently
+		// confirm the directory exists on disk before running git inside it. A
+		// missing worktree is surfaced as locked when git has it locked (it
+		// cannot be pruned), and as stale otherwise.
+		if entry.prunable || !s.pathExists(entry.path) {
 			worktrees = append(worktrees, Info{
 				Path:       entry.path,
 				Branch:     normalizeBranch(entry.branch),
 				CommitHash: entry.commitHash,
-				Stale:      true,
+				Stale:      !entry.locked,
+				Locked:     entry.locked,
 			})
 			continue
 		}
@@ -151,6 +161,7 @@ func (s service) List() ([]Info, error) {
 			CommitLabel:           commitLabel,
 			CommitHash:            entry.commitHash,
 			HasUncommittedChanges: dirty,
+			Locked:                entry.locked,
 			CreatedAt:             s.createdAt(entry.path),
 		})
 	}
@@ -173,6 +184,14 @@ func (s service) List() ([]Info, error) {
 	}
 
 	return worktrees, nil
+}
+
+// pathExists reports whether the worktree's working directory is present on
+// disk. It is the guard that keeps List from running git -C against a worktree
+// whose directory has been removed.
+func (s service) pathExists(path string) bool {
+	_, err := s.stat(path)
+	return err == nil
 }
 
 // createdAt reports when the worktree at path was added. Git does not expose

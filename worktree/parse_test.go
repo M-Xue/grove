@@ -23,6 +23,26 @@ func TestParseWorktreeList(t *testing.T) {
 	}
 }
 
+func TestParseWorktreeListDetectsLocked(t *testing.T) {
+	// git annotates a locked worktree with a bare "locked" line, or "locked "
+	// followed by a reason.
+	output := []byte("worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /pinned\nHEAD def456\nbranch refs/heads/pinned\nlocked on removable media\n")
+
+	got, err := parseWorktreeList(output)
+	if err != nil {
+		t.Fatalf("parseWorktreeList returned error: %v", err)
+	}
+
+	want := []listEntry{
+		{path: "/repo", branch: "refs/heads/main", commitHash: "abc123"},
+		{path: "/pinned", branch: "refs/heads/pinned", commitHash: "def456", locked: true},
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected entries: got %#v want %#v", got, want)
+	}
+}
+
 func TestParseWorktreeListRequiresPath(t *testing.T) {
 	_, err := parseWorktreeList([]byte("HEAD abc123\nbranch refs/heads/main\n"))
 	if err == nil {
