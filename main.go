@@ -31,7 +31,7 @@ func main() {
 		Branch:   branch.NewService(runner),
 	}, app.WithInitialScreen(cmd.Screen))
 
-	p := tea.NewProgram(ui.New(application), tea.WithAltScreen())
+	p := tea.NewProgram(ui.New(application), tea.WithAltScreen(), tea.WithOutput(os.Stderr))
 	model, err := p.Run()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error running grove: %v\n", err)
