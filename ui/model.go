@@ -2,6 +2,7 @@ package ui
 
 import (
 	"strings"
+	"time"
 
 	"github.com/M-Xue/grove/app"
 	"github.com/M-Xue/grove/ui/components/loading"
@@ -15,9 +16,14 @@ import (
 // Command across the Bubble Tea bus.
 type appMsg struct{ msg app.Message }
 
+// spinnerTickMsg advances the loading spinner one frame.
+type spinnerTickMsg struct{}
+
 const (
 	horizontalPadding = 4
 	verticalPadding   = 2
+	// spinnerInterval is how often the Braille spinner advances a frame.
+	spinnerInterval = 80 * time.Millisecond
 )
 
 type Model struct {
@@ -25,8 +31,9 @@ type Model struct {
 	width   int
 	height  int
 	screen  app.ScreenID
-	loading loading.Model
-	status  status.Model
+	loading  loading.Model
+	spinning bool
+	status   status.Model
 	change  *screens.ChangeScreen
 	add     *screens.AddScreen
 	branch  *screens.BranchScreen
@@ -45,7 +52,7 @@ func New(application *app.App) *Model {
 }
 
 func (m *Model) Init() tea.Cmd {
-	return m.run(m.app.Init())
+	return tea.Batch(m.run(m.app.Init()), m.ensureSpinner())
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -65,7 +72,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Deliver the message to the active screen for UI reactions (e.g.
 		// opening a dialog) in addition to app's state update above.
 		reaction := m.deliverMessage(msg.msg)
-		return m, tea.Batch(m.run(next), reaction)
+		return m, tea.Batch(m.run(next), reaction, m.ensureSpinner())
+	case spinnerTickMsg:
+		if !m.hasActiveLoading() {
+			m.spinning = false
+			return m, nil
+		}
+		m.loading.Tick()
+		return m, spinnerTick()
 	case tea.KeyMsg:
 		m.app.DismissCompletedLoading()
 		if len(m.app.State().Statuses) > 0 {
@@ -84,10 +98,37 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.syncScreenTransitions(m.screen, m.app.State().Screen)
 		m.syncScreens()
-		return m, cmd
+		return m, tea.Batch(cmd, m.ensureSpinner())
 	default:
 		return m, nil
 	}
+}
+
+// spinnerTick schedules the next spinner frame.
+func spinnerTick() tea.Cmd {
+	return tea.Tick(spinnerInterval, func(time.Time) tea.Msg {
+		return spinnerTickMsg{}
+	})
+}
+
+// hasActiveLoading reports whether any loading entry is still in progress.
+func (m *Model) hasActiveLoading() bool {
+	for _, entry := range m.app.State().Loading {
+		if !entry.Completed {
+			return true
+		}
+	}
+	return false
+}
+
+// ensureSpinner starts the spinner tick loop when there is active loading work
+// and the loop is not already running, guaranteeing a single loop at a time.
+func (m *Model) ensureSpinner() tea.Cmd {
+	if m.spinning || !m.hasActiveLoading() {
+		return nil
+	}
+	m.spinning = true
+	return spinnerTick()
 }
 
 func (m *Model) screenContext() *screens.ScreenContext {
