@@ -15,6 +15,15 @@ func TestUpdateAddsASCIIInput(t *testing.T) {
 	}
 }
 
+func TestUpdateIgnoresAltModifiedRunes(t *testing.T) {
+	m := New("placeholder")
+	m.Focus()
+	consumed, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}, Alt: true})
+	if consumed || m.Value() != "" {
+		t.Fatalf("expected alt+rune to be ignored, got consumed=%v value=%q", consumed, m.Value())
+	}
+}
+
 func TestUpdateBackspaceRemovesCharacter(t *testing.T) {
 	m := New("placeholder")
 	m.Focus()

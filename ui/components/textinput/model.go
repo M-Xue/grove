@@ -73,6 +73,9 @@ func (m *Model) Update(msg tea.KeyMsg) (bool, tea.Cmd) {
 		m.value = m.value[:m.cursor] + m.value[m.cursor+1:]
 		return true, nil
 	case tea.KeyRunes, tea.KeySpace:
+		if msg.Alt {
+			return false, nil
+		}
 		runes := filterASCII(msg.String())
 		m.value = m.value[:m.cursor] + runes + m.value[m.cursor:]
 		m.cursor += len(runes)
