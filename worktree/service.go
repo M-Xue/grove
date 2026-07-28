@@ -35,11 +35,13 @@ type Info struct {
 
 type Runner interface {
 	CombinedOutput(name string, args ...string) ([]byte, error)
+	StreamProgress(onLine func(string), name string, args ...string) error
 }
 
 type Service interface {
 	Add(path, branch string) error
 	AddWithNewBranch(path, branch string) error
+	AddWithProgress(path, branch string, createBranch bool, onProgress func(Progress)) error
 	BranchExists(branch string) (bool, error)
 	List() ([]Info, error)
 	Remove(path string) error
@@ -59,23 +61,42 @@ func NewService(runner Runner) Service {
 }
 
 func (s service) Add(path, branch string) error {
-	path, branch, err := validateAddInput(path, branch)
-	if err != nil {
-		return err
-	}
-
-	_, err = s.runner.CombinedOutput("git", "worktree", "add", path, branch)
-	return err
+	return s.add(path, branch, false, nil)
 }
 
 func (s service) AddWithNewBranch(path, branch string) error {
+	return s.add(path, branch, true, nil)
+}
+
+// AddWithProgress adds a worktree, invoking onProgress for each checkout
+// progress update git reports while populating the working tree. onProgress may
+// be nil. When createBranch is set a new branch is created for the worktree.
+func (s service) AddWithProgress(path, branch string, createBranch bool, onProgress func(Progress)) error {
+	return s.add(path, branch, createBranch, onProgress)
+}
+
+// add is the shared implementation behind Add, AddWithNewBranch and
+// AddWithProgress. It streams git's stderr so checkout progress can be surfaced
+// live; callers that do not care about progress pass a nil onProgress.
+func (s service) add(path, branch string, createBranch bool, onProgress func(Progress)) error {
 	path, branch, err := validateAddInput(path, branch)
 	if err != nil {
 		return err
 	}
 
-	_, err = s.runner.CombinedOutput("git", "worktree", "add", "-b", branch, path)
-	return err
+	args := []string{"worktree", "add", path, branch}
+	if createBranch {
+		args = []string{"worktree", "add", "-b", branch, path}
+	}
+
+	return s.runner.StreamProgress(func(line string) {
+		if onProgress == nil {
+			return
+		}
+		if p, ok := parseUpdatingFiles(line); ok {
+			onProgress(p)
+		}
+	}, "git", args...)
 }
 
 func (s service) Remove(path string) error {

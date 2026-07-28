@@ -177,6 +177,25 @@ func TestHandleMessageMarksLoadingDoneOnSuccess(t *testing.T) {
 	}
 }
 
+func TestHandleWorktreeProgressUpdatesOnlyMatchingEntry(t *testing.T) {
+	a := New(Services{})
+	other := a.setLoading("loading worktrees")
+	id := a.setProgressLoading("creating branch and worktree")
+	if !a.State().Loading[1].Progress {
+		t.Fatalf("expected progress entry, got %#v", a.State().Loading[1])
+	}
+
+	a.HandleMessage(WorktreeProgressMessage{LoadingID: id, Done: 27, Total: 57})
+
+	state := a.State()
+	if state.Loading[1].Done != 27 || state.Loading[1].Total != 57 {
+		t.Fatalf("expected progress 27/57, got %#v", state.Loading[1])
+	}
+	if state.Loading[0].Done != 0 || state.Loading[0].Total != 0 {
+		t.Fatalf("progress leaked onto entry %q: %#v", other, state.Loading[0])
+	}
+}
+
 func TestSequentialLoadingStatesArePreserved(t *testing.T) {
 	a := New(Services{})
 	id1 := a.setLoading("checking branch")

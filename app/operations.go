@@ -1,5 +1,7 @@
 package app
 
+import "github.com/M-Xue/grove/worktree"
+
 // This file defines the async operations grove can perform. Each helper runs
 // on the main loop: it synchronously sets a loading entry (capturing its ID)
 // and returns a Command whose thunk performs the git work off the main loop,
@@ -102,16 +104,21 @@ func (a *App) addWorktree(path, branch string, createBranch bool) Command {
 	if createBranch {
 		message = "creating branch and worktree"
 	}
-	id := a.setLoading(message)
+	id := a.setProgressLoading(message)
 	worktrees := a.services.Worktree
 	return func() Message {
-		var err error
-		if createBranch {
-			err = worktrees.AddWithNewBranch(path, branch)
-		} else {
-			err = worktrees.Add(path, branch)
-		}
-		return WorktreeAddedMessage{LoadingID: id, Err: err}
+		// The git work runs on its own goroutine so the thunk can return the
+		// channel immediately; progress and the terminal result are delivered
+		// through it. The buffer keeps a fast checkout from blocking on the UI.
+		updates := make(chan Message, 16)
+		go func() {
+			err := worktrees.AddWithProgress(path, branch, createBranch, func(p worktree.Progress) {
+				updates <- WorktreeProgressMessage{LoadingID: id, Done: p.Done, Total: p.Total}
+			})
+			updates <- WorktreeAddedMessage{LoadingID: id, Err: err}
+			close(updates)
+		}()
+		return WorktreeAddStartedMessage{Updates: updates}
 	}
 }
 

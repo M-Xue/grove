@@ -84,6 +84,22 @@ type BranchCheckFailedMessage struct {
 	Err       error
 }
 
+// WorktreeAddStartedMessage carries the channel of progress and completion
+// messages emitted while a worktree is being added. The UI drains Updates,
+// feeding each message through HandleMessage, until the channel is closed. It
+// is handled entirely in the UI layer and never reaches HandleMessage.
+type WorktreeAddStartedMessage struct {
+	Updates <-chan Message
+}
+
+// WorktreeProgressMessage reports checkout progress for the in-flight worktree
+// add identified by LoadingID.
+type WorktreeProgressMessage struct {
+	LoadingID string
+	Done      int
+	Total     int
+}
+
 type WorktreeAddedMessage struct {
 	LoadingID string
 	Err       error

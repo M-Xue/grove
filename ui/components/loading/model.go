@@ -2,6 +2,7 @@ package loading
 
 import (
 	"github.com/M-Xue/grove/app"
+	"github.com/M-Xue/grove/ui/components/progressbar"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -10,10 +11,11 @@ import (
 var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
 type Model struct {
-	frame int
+	frame    int
+	progress progressbar.Model
 }
 
-func New() Model { return Model{} }
+func New() Model { return Model{progress: progressbar.New()} }
 
 // Tick advances the spinner to its next frame. The UI drives this on a timer
 // while any loading entry is still active.
@@ -34,6 +36,13 @@ func (m Model) View(entries []app.LoadingEntry, width int) []string {
 			continue
 		}
 		spinner := spinnerFrames[m.frame%len(spinnerFrames)]
+		if entry.Progress {
+			// Render the bar outside the loading style so its own cell colours
+			// are preserved; a single space separates it from the message.
+			bar := m.progress.View(entry.Done, entry.Total)
+			lines = append(lines, style.Render(spinner+" "+message)+" "+bar)
+			continue
+		}
 		lines = append(lines, style.Render(spinner+" "+message))
 	}
 	return lines

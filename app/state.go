@@ -16,6 +16,34 @@ func (a *App) setLoading(message string) string {
 	return id
 }
 
+// setProgressLoading appends a loading entry that renders a checkout progress
+// bar, starting at 0%. It otherwise behaves like setLoading, returning the new
+// entry's ID.
+func (a *App) setProgressLoading(message string) string {
+	a.loadingCounter++
+	id := nextLoadingID(a.loadingCounter)
+	a.state.Loading = append(a.state.Loading, LoadingEntry{
+		ID:        id,
+		Active:    true,
+		Completed: false,
+		Message:   message,
+		Progress:  true,
+	})
+	return id
+}
+
+// updateLoadingProgress records checkout progress against the loading entry
+// with the given ID, leaving other entries untouched.
+func (a *App) updateLoadingProgress(id string, done, total int) {
+	for i := range a.state.Loading {
+		if a.state.Loading[i].ID == id {
+			a.state.Loading[i].Done = done
+			a.state.Loading[i].Total = total
+			return
+		}
+	}
+}
+
 // markLoadingDone marks the loading entry with the given ID as completed,
 // leaving any other (still-pending) entries untouched.
 func (a *App) markLoadingDone(id string) {

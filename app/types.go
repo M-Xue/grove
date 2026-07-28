@@ -23,6 +23,12 @@ type LoadingEntry struct {
 	Active    bool
 	Completed bool
 	Message   string
+	// Progress marks an entry that renders a checkout progress bar alongside
+	// its spinner. Done/Total are the files written so far out of the total;
+	// a zero Total renders as 0%.
+	Progress bool
+	Done     int
+	Total    int
 }
 
 type ChangeState struct{}

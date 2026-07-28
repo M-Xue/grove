@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -62,6 +63,28 @@ func (s *stubRunner) CombinedOutput(name string, args ...string) ([]byte, error)
 		return nil, errors.New("unexpected command")
 	}
 	return result.output, result.err
+}
+
+// StreamProgress mirrors CombinedOutput's call recording and result lookup, and
+// additionally replays any scripted output line-by-line through onLine so tests
+// can drive progress parsing. Output lines may be separated by "\r" or "\n".
+func (s *stubRunner) StreamProgress(onLine func(string), name string, args ...string) error {
+	call := commandCall{name: name, args: append([]string(nil), args...)}
+	s.calls = append(s.calls, call)
+
+	key := name + "\x00" + joinArgs(args)
+	result, ok := s.results[key]
+	if !ok {
+		return errors.New("unexpected command")
+	}
+	if onLine != nil {
+		for _, line := range strings.FieldsFunc(string(result.output), func(r rune) bool {
+			return r == '\r' || r == '\n'
+		}) {
+			onLine(line)
+		}
+	}
+	return result.err
 }
 
 func joinArgs(args []string) string {
@@ -167,6 +190,52 @@ func TestServiceAddNewBranchRunsGitWorktreeAddWithBranchCreation(t *testing.T) {
 	want := commandCall{name: "git", args: []string{"worktree", "add", "-b", "feature/auth", "../feature-auth"}}
 	if len(runner.calls) != 1 || !reflect.DeepEqual(runner.calls[0], want) {
 		t.Fatalf("unexpected call: got %+v want %+v", runner.calls, want)
+	}
+}
+
+func TestServiceAddWithProgressReportsCheckoutProgress(t *testing.T) {
+	output := "Preparing worktree (new branch 'feature/auth')\r" +
+		"Updating files:  50% (1/2)\r" +
+		"Updating files: 100% (2/2), done."
+	runner := &stubRunner{
+		results: map[string]commandResult{
+			commandKey("git", "worktree", "add", "-b", "feature/auth", "../feature-auth"): {
+				output: []byte(output),
+			},
+		},
+	}
+	service := NewService(runner)
+
+	var got []Progress
+	err := service.AddWithProgress("../feature-auth", "feature/auth", true, func(p Progress) {
+		got = append(got, p)
+	})
+	if err != nil {
+		t.Fatalf("AddWithProgress returned error: %v", err)
+	}
+
+	want := []Progress{{Done: 1, Total: 2}, {Done: 2, Total: 2}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("unexpected progress: got %+v want %+v", got, want)
+	}
+}
+
+func TestParseUpdatingFiles(t *testing.T) {
+	cases := []struct {
+		line string
+		want Progress
+		ok   bool
+	}{
+		{"Updating files:  47% (27/57)", Progress{Done: 27, Total: 57}, true},
+		{"Updating files: 100% (57/57), done.", Progress{Done: 57, Total: 57}, true},
+		{"Preparing worktree (new branch 'feature/auth')", Progress{}, false},
+		{"", Progress{}, false},
+	}
+	for _, c := range cases {
+		got, ok := parseUpdatingFiles(c.line)
+		if ok != c.ok || got != c.want {
+			t.Fatalf("parseUpdatingFiles(%q) = %+v, %v; want %+v, %v", c.line, got, ok, c.want, c.ok)
+		}
 	}
 }
 

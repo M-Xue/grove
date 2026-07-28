@@ -116,6 +116,9 @@ func (a *App) HandleMessage(message Message) Command {
 		a.clearLoadingEntry(msg.LoadingID)
 		a.appendStatus(StatusError, msg.Err.Error())
 		return nil
+	case WorktreeProgressMessage:
+		a.updateLoadingProgress(msg.LoadingID, msg.Done, msg.Total)
+		return nil
 	case WorktreeAddedMessage:
 		if msg.Err != nil {
 			a.clearLoadingEntry(msg.LoadingID)

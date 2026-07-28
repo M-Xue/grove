@@ -19,6 +19,26 @@ type appMsg struct{ msg app.Message }
 // spinnerTickMsg advances the loading spinner one frame.
 type spinnerTickMsg struct{}
 
+// streamNextMsg carries one app.Message drained from a streaming operation's
+// channel, along with the channel so the reader can re-subscribe for the next
+// message until the channel is closed.
+type streamNextMsg struct {
+	msg app.Message
+	ch  <-chan app.Message
+}
+
+// readStream returns a command that reads the next message from ch. It returns
+// nil once the channel is closed, which ends the drain loop.
+func readStream(ch <-chan app.Message) tea.Cmd {
+	return func() tea.Msg {
+		msg, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return streamNextMsg{msg: msg, ch: ch}
+	}
+}
+
 const (
 	horizontalPadding = 4
 	verticalPadding   = 2
@@ -65,6 +85,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if _, ok := msg.msg.(app.QuitRequested); ok {
 			return m, tea.Quit
 		}
+		// A streaming operation returns a channel of messages rather than a
+		// single result; begin draining it instead of handling it as state.
+		if start, ok := msg.msg.(app.WorktreeAddStartedMessage); ok {
+			return m, readStream(start.Updates)
+		}
 		previousScreen := m.screen
 		next := m.app.HandleMessage(msg.msg)
 		m.syncScreenTransitions(previousScreen, m.app.State().Screen)
@@ -73,6 +98,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// opening a dialog) in addition to app's state update above.
 		reaction := m.deliverMessage(msg.msg)
 		return m, tea.Batch(m.run(next), reaction, m.ensureSpinner())
+	case streamNextMsg:
+		previousScreen := m.screen
+		next := m.app.HandleMessage(msg.msg)
+		m.syncScreenTransitions(previousScreen, m.app.State().Screen)
+		m.syncScreens()
+		reaction := m.deliverMessage(msg.msg)
+		// Re-subscribe for the next message; readStream stops when the channel
+		// closes after the terminal message.
+		return m, tea.Batch(m.run(next), reaction, readStream(msg.ch), m.ensureSpinner())
 	case spinnerTickMsg:
 		if !m.hasActiveLoading() {
 			m.spinning = false
