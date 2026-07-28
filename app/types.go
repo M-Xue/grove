@@ -29,6 +29,10 @@ type LoadingEntry struct {
 	Progress bool
 	Done     int
 	Total    int
+	// Blocking marks an entry whose in-flight operation should freeze the UI:
+	// all input is ignored (except quit) until it completes. Passive background
+	// loads (worktree/branch/commit lists) leave Blocking false.
+	Blocking bool
 }
 
 type ChangeState struct{}

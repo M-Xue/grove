@@ -120,6 +120,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.app.ClearStatus()
 		}
 		m.syncScreens()
+		if inputFrozen(m.app.State(), msg) {
+			// A blocking operation is in flight: ignore all input but quit.
+			return m, m.ensureSpinner()
+		}
 		ctx := m.screenContext()
 		var cmd tea.Cmd
 		switch m.app.State().Screen {
@@ -136,6 +140,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	default:
 		return m, nil
 	}
+}
+
+// inputFrozen reports whether a keystroke should be ignored because a blocking
+// operation is in flight. Quit (ctrl+c) always passes through so the user is
+// never trapped.
+func inputFrozen(state app.State, msg tea.KeyMsg) bool {
+	return state.IsBusy() && msg.Type != tea.KeyCtrlC
 }
 
 // spinnerTick schedules the next spinner frame.
@@ -375,6 +386,9 @@ func placeLeftRight(left, right string, width int) string {
 }
 
 func (m *Model) footer(contentWidth int, state app.State) string {
+	if state.IsBusy() {
+		return "working… ctrl+c quit"
+	}
 	switch state.Screen {
 	case app.ScreenAdd:
 		return m.add.Footer(contentWidth)

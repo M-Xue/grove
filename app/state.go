@@ -16,8 +16,25 @@ func (a *App) setLoading(message string) string {
 	return id
 }
 
+// setBlockingLoading appends an active loading entry whose operation freezes the
+// UI until it completes. It otherwise behaves like setLoading, returning the new
+// entry's ID.
+func (a *App) setBlockingLoading(message string) string {
+	a.loadingCounter++
+	id := nextLoadingID(a.loadingCounter)
+	a.state.Loading = append(a.state.Loading, LoadingEntry{
+		ID:        id,
+		Active:    true,
+		Completed: false,
+		Message:   message,
+		Blocking:  true,
+	})
+	return id
+}
+
 // setProgressLoading appends a loading entry that renders a checkout progress
-// bar, starting at 0%. It otherwise behaves like setLoading, returning the new
+// bar, starting at 0%. Worktree creation is inherently blocking, so it also
+// freezes the UI. It otherwise behaves like setLoading, returning the new
 // entry's ID.
 func (a *App) setProgressLoading(message string) string {
 	a.loadingCounter++
@@ -28,8 +45,21 @@ func (a *App) setProgressLoading(message string) string {
 		Completed: false,
 		Message:   message,
 		Progress:  true,
+		Blocking:  true,
 	})
 	return id
+}
+
+// IsBusy reports whether any blocking operation is still in flight. The UI reads
+// this to freeze input. Completed entries (awaiting dismissal) do not count, so
+// the UI unfreezes the instant an operation finishes.
+func (s State) IsBusy() bool {
+	for _, entry := range s.Loading {
+		if entry.Blocking && !entry.Completed {
+			return true
+		}
+	}
+	return false
 }
 
 // updateLoadingProgress records checkout progress against the loading entry

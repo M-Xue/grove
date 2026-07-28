@@ -17,6 +17,7 @@ type Model struct {
 	value       string
 	placeholder string
 	focused     bool
+	disabled    bool
 	cursor      int
 }
 
@@ -34,12 +35,13 @@ func (m *Model) Clear() {
 	m.value = ""
 	m.cursor = 0
 }
-func (m *Model) Focus()       { m.focused = true }
-func (m *Model) Blur()        { m.focused = false }
-func (m Model) Focused() bool { return m.focused }
+func (m *Model) Focus()             { m.focused = true }
+func (m *Model) Blur()              { m.focused = false }
+func (m Model) Focused() bool       { return m.focused }
+func (m *Model) SetDisabled(v bool) { m.disabled = v }
 
 func (m *Model) Update(msg tea.KeyMsg) (bool, tea.Cmd) {
-	if !m.focused {
+	if !m.focused || m.disabled {
 		return false, nil
 	}
 	switch msg.Type {
@@ -86,6 +88,14 @@ func (m *Model) Update(msg tea.KeyMsg) (bool, tea.Cmd) {
 }
 
 func (m Model) View() string {
+	if m.disabled {
+		// Inert: no focus prefix, no caret, value dimmed to grey so the field
+		// visibly reads as read-only while an operation is in flight.
+		if m.value == "" {
+			return "  " + placeholderColor + m.placeholder + resetColor
+		}
+		return "  " + placeholderColor + m.value + resetColor
+	}
 	prefix := "  "
 	if m.focused {
 		prefix = focusColor + "> " + resetColor

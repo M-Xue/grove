@@ -40,7 +40,11 @@ func NewAddScreen(application addApp) *AddScreen {
 	return s
 }
 
-func (s *AddScreen) Sync(state app.State) {}
+func (s *AddScreen) Sync(state app.State) {
+	busy := state.IsBusy()
+	s.path.SetDisabled(busy)
+	s.branch.SetDisabled(busy)
+}
 
 // OnMessage reacts to the semantic outcome of checking a branch: when the
 // branch is absent, it opens a screen-owned dialog offering to create it.

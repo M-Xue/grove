@@ -58,6 +58,7 @@ func NewBranchScreen(application branchApp) *BranchScreen {
 }
 
 func (s *BranchScreen) Sync(state app.State) {
+	s.search.SetDisabled(state.IsBusy())
 	selectedID, _ := s.list.SelectedID()
 	s.scope = state.BranchScope
 	s.registry = s.buildRegistry()

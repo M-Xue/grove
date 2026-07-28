@@ -49,7 +49,7 @@ func (a *App) loadBranchCommits(name string) Command {
 }
 
 func (a *App) checkoutBranch(name string) Command {
-	id := a.setLoading("switching branch")
+	id := a.setBlockingLoading("switching branch")
 	branches := a.services.Branch
 	return func() Message {
 		err := branches.Checkout(name)
@@ -58,7 +58,7 @@ func (a *App) checkoutBranch(name string) Command {
 }
 
 func (a *App) deleteBranch(name string) Command {
-	id := a.setLoading("deleting branch")
+	id := a.setBlockingLoading("deleting branch")
 	branches := a.services.Branch
 	return func() Message {
 		err := branches.Delete(name)
@@ -67,7 +67,7 @@ func (a *App) deleteBranch(name string) Command {
 }
 
 func (a *App) deleteAllBranches() Command {
-	id := a.setLoading("deleting local branches")
+	id := a.setBlockingLoading("deleting local branches")
 	branches := a.services.Branch
 	return func() Message {
 		summary, err := branches.DeleteAllLocal()
@@ -76,7 +76,7 @@ func (a *App) deleteAllBranches() Command {
 }
 
 func (a *App) fetchBranches() Command {
-	id := a.setLoading("fetching branches")
+	id := a.setBlockingLoading("fetching branches")
 	branches := a.services.Branch
 	return func() Message {
 		err := branches.Fetch()
@@ -85,7 +85,7 @@ func (a *App) fetchBranches() Command {
 }
 
 func (a *App) checkBranchExists(path, branch string) Command {
-	id := a.setLoading("checking branch")
+	id := a.setBlockingLoading("checking branch")
 	worktrees := a.services.Worktree
 	return func() Message {
 		exists, err := worktrees.BranchExists(branch)
@@ -123,7 +123,7 @@ func (a *App) addWorktree(path, branch string, createBranch bool) Command {
 }
 
 func (a *App) removeWorktree(path string) Command {
-	id := a.setLoading("removing worktree")
+	id := a.setBlockingLoading("removing worktree")
 	worktrees := a.services.Worktree
 	return func() Message {
 		err := worktrees.Remove(path)

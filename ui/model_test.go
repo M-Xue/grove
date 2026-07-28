@@ -4,8 +4,52 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/M-Xue/grove/app"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+func busyState() app.State {
+	return app.State{Loading: []app.LoadingEntry{{Blocking: true}}}
+}
+
+func TestInputFrozenBlocksKeysWhileBusy(t *testing.T) {
+	if !inputFrozen(busyState(), tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}) {
+		t.Fatal("expected a rune key to be frozen while busy")
+	}
+	if !inputFrozen(busyState(), tea.KeyMsg{Type: tea.KeyEnter}) {
+		t.Fatal("expected enter to be frozen while busy")
+	}
+}
+
+func TestInputFrozenAllowsQuitWhileBusy(t *testing.T) {
+	if inputFrozen(busyState(), tea.KeyMsg{Type: tea.KeyCtrlC}) {
+		t.Fatal("expected ctrl+c to pass through while busy")
+	}
+}
+
+func TestInputFrozenAllowsKeysWhenIdle(t *testing.T) {
+	idle := app.State{Loading: []app.LoadingEntry{{Blocking: false}}}
+	if inputFrozen(idle, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}) {
+		t.Fatal("expected keys to pass through when no blocking op is in flight")
+	}
+}
+
+func TestFooterShowsBusyHintWhileBusy(t *testing.T) {
+	m := New(app.New(app.Services{}))
+	got := m.footer(80, busyState())
+	if !strings.Contains(got, "working") || !strings.Contains(got, "ctrl+c") {
+		t.Fatalf("expected a busy footer hint, got %q", got)
+	}
+}
+
+func TestFooterShowsScreenHintsWhenIdle(t *testing.T) {
+	m := New(app.New(app.Services{}))
+	got := m.footer(80, app.State{Screen: app.ScreenChange})
+	if strings.Contains(got, "working") {
+		t.Fatalf("expected the normal screen footer when idle, got %q", got)
+	}
+}
 
 func TestPlaceLeftRightSplitsColumns(t *testing.T) {
 	got := placeLeftRight("status", "loading", 20)
