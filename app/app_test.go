@@ -243,8 +243,8 @@ func TestBranchExistsPreservesCompletedCheckingPhase(t *testing.T) {
 	if state.Loading[0].Message != "checking branch" || !state.Loading[0].Completed {
 		t.Fatalf("expected completed checking branch entry, got %#v", state.Loading[0])
 	}
-	if state.Loading[1].Message != "adding worktree" || state.Loading[1].Completed {
-		t.Fatalf("expected active adding worktree entry, got %#v", state.Loading[1])
+	if state.Loading[1].Message != "creating worktree" || state.Loading[1].Completed {
+		t.Fatalf("expected active creating worktree entry, got %#v", state.Loading[1])
 	}
 }
 

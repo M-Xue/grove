@@ -100,7 +100,7 @@ func (a *App) checkBranchExists(path, branch string) Command {
 }
 
 func (a *App) addWorktree(path, branch string, createBranch bool) Command {
-	message := "adding worktree"
+	message := "creating worktree"
 	if createBranch {
 		message = "creating branch and worktree"
 	}
