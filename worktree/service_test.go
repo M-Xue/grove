@@ -247,7 +247,7 @@ func TestServiceRemoveRunsGitWorktreeRemove(t *testing.T) {
 	}
 	service := NewService(runner)
 
-	err := service.Remove("../feature-auth")
+	err := service.Remove("../feature-auth", false)
 	if err != nil {
 		t.Fatalf("Remove returned error: %v", err)
 	}
@@ -258,11 +258,30 @@ func TestServiceRemoveRunsGitWorktreeRemove(t *testing.T) {
 	}
 }
 
+func TestServiceRemoveForceAddsForceFlag(t *testing.T) {
+	runner := &stubRunner{
+		results: map[string]commandResult{
+			commandKey("git", "worktree", "remove", "--force", "../feature-auth"): {},
+		},
+	}
+	service := NewService(runner)
+
+	err := service.Remove("../feature-auth", true)
+	if err != nil {
+		t.Fatalf("Remove returned error: %v", err)
+	}
+
+	want := commandCall{name: "git", args: []string{"worktree", "remove", "--force", "../feature-auth"}}
+	if len(runner.calls) != 1 || !reflect.DeepEqual(runner.calls[0], want) {
+		t.Fatalf("unexpected call: got %+v want %+v", runner.calls, want)
+	}
+}
+
 func TestServiceRemoveRequiresPath(t *testing.T) {
 	runner := &stubRunner{}
 	service := NewService(runner)
 
-	err := service.Remove(" ")
+	err := service.Remove(" ", false)
 	if err == nil {
 		t.Fatal("expected error for missing path")
 	}
@@ -282,7 +301,7 @@ func TestServiceRemoveReturnsRunnerError(t *testing.T) {
 	}
 	service := NewService(runner)
 
-	err := service.Remove("../feature-auth")
+	err := service.Remove("../feature-auth", false)
 	if err == nil {
 		t.Fatal("expected runner error")
 	}
@@ -788,5 +807,8 @@ func TestServiceListIgnoresUntrackedFilesForDirtyState(t *testing.T) {
 	}
 	if got[0].HasUncommittedChanges {
 		t.Fatalf("expected untracked files to be ignored, got %#v", got[0])
+	}
+	if !got[0].HasUntrackedFiles {
+		t.Fatalf("expected untracked files to be reported, got %#v", got[0])
 	}
 }

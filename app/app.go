@@ -1,10 +1,15 @@
 package app
 
+import "github.com/M-Xue/grove/worktree"
+
 type App struct {
 	services        Services
 	state           State
 	loadingCounter  int
 	branchCommitSeq int
+	// saveWorktrees persists the latest worktree list for stale-while-revalidate
+	// startup. It is best-effort and injected by main; nil disables caching.
+	saveWorktrees func([]worktree.Info)
 }
 
 type Option func(*App)
@@ -12,6 +17,24 @@ type Option func(*App)
 func WithInitialScreen(screen ScreenID) Option {
 	return func(a *App) {
 		a.state.Screen = screen
+	}
+}
+
+// WithCachedWorktrees seeds the worktree list from a persisted cache so the
+// change screen paints instantly on launch. The seeded list is overwritten by
+// the first live load, so a stale seed self-corrects within moments.
+func WithCachedWorktrees(list []worktree.Info) Option {
+	return func(a *App) {
+		a.state.Worktrees = list
+	}
+}
+
+// WithWorktreeCacheSaver injects the callback used to persist the worktree list
+// whenever a fresh one is loaded. It is best-effort: the callback owns error
+// handling and must never surface a failure to the user.
+func WithWorktreeCacheSaver(save func([]worktree.Info)) Option {
+	return func(a *App) {
+		a.saveWorktrees = save
 	}
 }
 

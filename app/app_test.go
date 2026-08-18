@@ -130,6 +130,27 @@ func TestRemoveWorktreeReturnsCommand(t *testing.T) {
 	}
 }
 
+func TestForceRemoveWorktreeRequiresSelection(t *testing.T) {
+	a := New(Services{})
+	if cmd := a.ForceRemoveWorktree(""); cmd != nil {
+		t.Fatalf("expected nil command, got %#v", cmd)
+	}
+	if len(a.State().Statuses) != 1 {
+		t.Fatalf("expected one status, got %d", len(a.State().Statuses))
+	}
+}
+
+func TestForceRemoveWorktreeReturnsCommand(t *testing.T) {
+	a := New(Services{})
+	cmd := a.ForceRemoveWorktree("/repo")
+	if cmd == nil {
+		t.Fatal("expected a force-remove command")
+	}
+	if len(a.State().Loading) != 1 || a.State().Loading[0].Message != "removing worktree" {
+		t.Fatalf("expected remove-worktree loading entry, got %#v", a.State().Loading)
+	}
+}
+
 func TestPruneWorktreesReportsWhenNothingStale(t *testing.T) {
 	a := New(Services{})
 	a.HandleMessage(WorktreesLoadedMessage{Worktrees: []worktree.Info{{Path: "/repo", Stale: false}}})

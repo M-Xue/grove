@@ -122,11 +122,11 @@ func (a *App) addWorktree(path, branch string, createBranch bool) Command {
 	}
 }
 
-func (a *App) removeWorktree(path string) Command {
+func (a *App) removeWorktree(path string, force bool) Command {
 	id := a.setBlockingLoading("removing worktree")
 	worktrees := a.services.Worktree
 	return func() Message {
-		err := worktrees.Remove(path)
+		err := worktrees.Remove(path, force)
 		return WorktreeRemovedMessage{LoadingID: id, Path: path, Err: err}
 	}
 }

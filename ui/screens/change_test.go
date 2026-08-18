@@ -37,3 +37,31 @@ func TestChangeScreenLabelsLockedAndStaleWorktrees(t *testing.T) {
 		t.Fatalf("locked worktree must not be dimmed, got:\n%s", view)
 	}
 }
+
+func TestChangeScreenRemoveDialogWarnsWhenDirty(t *testing.T) {
+	cases := []struct {
+		name      string
+		worktree  worktree.Info
+		wantTitle string
+	}{
+		{"clean", worktree.Info{Path: "/repo", Branch: "main"}, "Delete worktree?"},
+		{"uncommitted", worktree.Info{Path: "/repo", Branch: "main", HasUncommittedChanges: true}, "Force delete worktree?"},
+		{"untracked", worktree.Info{Path: "/repo", Branch: "main", HasUntrackedFiles: true}, "Force delete worktree?"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := NewChangeScreen(fakeApp{})
+			s.Sync(app.State{Worktrees: []worktree.Info{tc.worktree}})
+
+			s.actionStartRemove(&ActionCtx{})
+			if !s.confirm.active {
+				t.Fatal("expected the confirm dialog to open")
+			}
+
+			view := s.View(120, 40, app.State{})
+			if !strings.Contains(view, tc.wantTitle) {
+				t.Fatalf("expected dialog titled %q, got:\n%s", tc.wantTitle, view)
+			}
+		})
+	}
+}

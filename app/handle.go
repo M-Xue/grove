@@ -21,6 +21,12 @@ func (a *App) HandleMessage(message Message) Command {
 		a.state.Worktrees = msg.Worktrees
 		a.state.SubmittedPath = ""
 		a.markLoadingDone(msg.LoadingID)
+		// Persist the fresh list for the next launch's instant paint. This is
+		// the single choke point every add/remove/prune funnels through, so
+		// the cache stays consistent with what the screen shows.
+		if a.saveWorktrees != nil {
+			a.saveWorktrees(msg.Worktrees)
+		}
 		if a.state.Screen == ScreenBranch && len(a.state.Branches) == 0 {
 			return a.loadBranches()
 		}

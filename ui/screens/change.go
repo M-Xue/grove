@@ -17,6 +17,7 @@ type changeApp interface {
 	OpenAdd()
 	OpenBranch() app.Command
 	RemoveWorktree(path string) app.Command
+	ForceRemoveWorktree(path string) app.Command
 	PruneWorktrees() app.Command
 	Quit() app.Command
 }
@@ -38,6 +39,9 @@ type appWorktree struct {
 	label string
 	color string
 	stale bool
+	// dirty reports that the worktree has uncommitted or untracked changes, so
+	// removing it requires git's --force.
+	dirty bool
 }
 
 func NewChangeScreen(application changeApp) *ChangeScreen {
@@ -66,7 +70,8 @@ func (s *ChangeScreen) Sync(state app.State) {
 			label += " [locked]"
 		}
 		items = append(items, selectlist.Item{ID: worktree.Path, Label: label, Color: color})
-		s.worktrees = append(s.worktrees, appWorktree{id: worktree.Path, label: label, color: color, stale: worktree.Stale})
+		dirty := worktree.HasUncommittedChanges || worktree.HasUntrackedFiles
+		s.worktrees = append(s.worktrees, appWorktree{id: worktree.Path, label: label, color: color, stale: worktree.Stale, dirty: dirty})
 	}
 	items = filterItems(items, s.search.Value())
 	s.list.SetItems(items)
@@ -156,10 +161,33 @@ func (s *ChangeScreen) actionStartRemove(actx *ActionCtx) app.Command {
 		return s.app.RemoveWorktree("")
 	}
 	path := item.ID
+	if s.isDirty(path) {
+		s.confirm.open(
+			"Force delete worktree?",
+			path+" has uncommitted or untracked changes that will be permanently lost.",
+			"Force delete",
+			false,
+			func(actx *ActionCtx) app.Command {
+				return s.app.ForceRemoveWorktree(path)
+			},
+		)
+		return nil
+	}
 	s.confirm.open("Delete worktree?", path, "Delete", false, func(actx *ActionCtx) app.Command {
 		return s.app.RemoveWorktree(path)
 	})
 	return nil
+}
+
+// isDirty reports whether the worktree at path has uncommitted or untracked
+// changes, so that removing it needs git's --force.
+func (s *ChangeScreen) isDirty(path string) bool {
+	for _, worktree := range s.worktrees {
+		if worktree.id == path {
+			return worktree.dirty
+		}
+	}
+	return false
 }
 
 func (s *ChangeScreen) actionStartPrune(actx *ActionCtx) app.Command {

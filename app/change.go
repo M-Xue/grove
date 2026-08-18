@@ -16,7 +16,18 @@ func (a *App) RemoveWorktree(path string) Command {
 		a.appendStatus(StatusInfo, "no worktree selected")
 		return nil
 	}
-	return a.removeWorktree(path)
+	return a.removeWorktree(path, false)
+}
+
+// ForceRemoveWorktree removes the worktree at path with git's --force, deleting
+// it even when it has uncommitted or untracked changes. An empty path reports
+// "no worktree selected" and does nothing.
+func (a *App) ForceRemoveWorktree(path string) Command {
+	if path == "" {
+		a.appendStatus(StatusInfo, "no worktree selected")
+		return nil
+	}
+	return a.removeWorktree(path, true)
 }
 
 // PruneWorktrees removes every stale worktree via git's global prune. When no

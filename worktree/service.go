@@ -20,6 +20,12 @@ type Info struct {
 	CommitLabel           string
 	CommitHash            string
 	HasUncommittedChanges bool
+	// HasUntrackedFiles reports that the working tree contains untracked files
+	// (git status "??" entries). It is tracked separately from
+	// HasUncommittedChanges because git worktree remove refuses to delete a
+	// worktree with untracked files just as it does one with modified ones, yet
+	// untracked files are not "uncommitted changes" in the tracked-content sense.
+	HasUntrackedFiles bool
 	// Stale reports that git considers the worktree prunable, typically
 	// because its working directory no longer exists on disk.
 	Stale bool
@@ -44,7 +50,7 @@ type Service interface {
 	AddWithProgress(path, branch string, createBranch bool, onProgress func(Progress)) error
 	BranchExists(branch string) (bool, error)
 	List() ([]Info, error)
-	Remove(path string) error
+	Remove(path string, force bool) error
 	Prune() error
 }
 
@@ -99,13 +105,20 @@ func (s service) add(path, branch string, createBranch bool, onProgress func(Pro
 	}, "git", args...)
 }
 
-func (s service) Remove(path string) error {
+// Remove deletes the worktree at path. When force is true it passes --force so
+// git will delete a worktree with modified or untracked files; without it git
+// refuses such a delete and returns an error.
+func (s service) Remove(path string, force bool) error {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return ErrWorktreePathRequired
 	}
 
-	_, err := s.runner.CombinedOutput("git", "worktree", "remove", path)
+	args := []string{"worktree", "remove", path}
+	if force {
+		args = []string{"worktree", "remove", "--force", path}
+	}
+	_, err := s.runner.CombinedOutput("git", args...)
 	return err
 }
 
@@ -171,7 +184,7 @@ func (s service) List() ([]Info, error) {
 			return nil, err
 		}
 
-		dirty, err := s.hasUncommittedChanges(entry.path)
+		status, err := s.workingTreeStatus(entry.path)
 		if err != nil {
 			return nil, err
 		}
@@ -181,7 +194,8 @@ func (s service) List() ([]Info, error) {
 			Branch:                normalizeBranch(entry.branch),
 			CommitLabel:           commitLabel,
 			CommitHash:            entry.commitHash,
-			HasUncommittedChanges: dirty,
+			HasUncommittedChanges: status.uncommitted,
+			HasUntrackedFiles:     status.untracked,
 			Locked:                entry.locked,
 			CreatedAt:             s.createdAt(entry.path),
 		})
@@ -249,17 +263,31 @@ func (s service) commitLabel(path string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-func (s service) hasUncommittedChanges(path string) (bool, error) {
+// workingTreeStatus summarizes the porcelain status of the worktree at path in
+// a single git call: whether it has tracked-but-uncommitted changes and whether
+// it has untracked files. git worktree remove refuses to delete a worktree when
+// either is present.
+type workingTreeStatus struct {
+	uncommitted bool
+	untracked   bool
+}
+
+func (s service) workingTreeStatus(path string) (workingTreeStatus, error) {
 	output, err := s.runner.CombinedOutput("git", "-C", path, "status", "--porcelain")
 	if err != nil {
-		return false, err
+		return workingTreeStatus{}, err
 	}
+	var status workingTreeStatus
 	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
 		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "?? ") {
+		if line == "" {
 			continue
 		}
-		return true, nil
+		if strings.HasPrefix(line, "??") {
+			status.untracked = true
+			continue
+		}
+		status.uncommitted = true
 	}
-	return false, nil
+	return status, nil
 }
