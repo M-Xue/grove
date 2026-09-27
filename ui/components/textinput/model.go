@@ -25,6 +25,10 @@ type Model struct {
 	disabled    bool
 	cursor      int
 	width       int
+	// offset is the index of the first visible character when the value is
+	// longer than the field width: the view scrolls horizontally to keep the
+	// cursor in the window. Indexes are byte-safe because values are ASCII.
+	offset int
 }
 
 func New(placeholder string) Model {
@@ -36,6 +40,7 @@ func (m *Model) SetPlaceholder(value string) { m.placeholder = value }
 func (m *Model) SetValue(value string) {
 	m.value = filterASCII(value)
 	m.cursor = len(m.value)
+	m.offset = m.scrollStart()
 }
 
 func (m Model) Value() string { return m.value }
@@ -43,6 +48,7 @@ func (m Model) Value() string { return m.value }
 func (m *Model) Clear() {
 	m.value = ""
 	m.cursor = 0
+	m.offset = 0
 }
 
 func (m *Model) Focus() { m.focused = true }
@@ -58,6 +64,15 @@ func (m *Model) SetDisabled(v bool) { m.disabled = v }
 func (m *Model) SetWidth(width int) { m.width = width }
 
 func (m *Model) Update(msg tea.KeyMsg) (bool, tea.Cmd) {
+	consumed, cmd := m.handleKey(msg)
+	if consumed {
+		// Keep the scroll window pinned to the cursor after every edit or move.
+		m.offset = m.scrollStart()
+	}
+	return consumed, cmd
+}
+
+func (m *Model) handleKey(msg tea.KeyMsg) (bool, tea.Cmd) {
 	if !m.focused || m.disabled {
 		return false, nil
 	}
@@ -121,27 +136,70 @@ func (m Model) View() string {
 		if content == "" {
 			content = m.placeholder
 		}
-		parts = append(parts, placeholder.Render(content))
+		parts = append(parts, placeholder.Render(clipTo(content, m.width)))
 		return m.fill(strings.Join(parts, ""), base)
 	}
 
+	// The focused field shows the window of the value around the cursor, so
+	// text longer than the field scrolls with the cursor rather than bleeding
+	// past it; a blurred field shows the head of the value, clipped.
+	value, at := m.visibleWindow()
 	switch {
 	case m.value == "" && m.focused:
 		parts = append(parts, cursor.Render(" "), placeholder.Render(m.placeholder))
 	case m.value == "":
 		parts = append(parts, placeholder.Render(m.placeholder))
 	case !m.focused:
-		parts = append(parts, text.Render(m.value))
-	case m.cursor >= len(m.value):
-		parts = append(parts, text.Render(m.value), cursor.Render(" "))
+		parts = append(parts, text.Render(clipTo(m.value, m.width)))
+	case at >= len(value):
+		parts = append(parts, text.Render(value), cursor.Render(" "))
 	default:
 		parts = append(parts,
-			text.Render(m.value[:m.cursor]),
-			cursor.Render(m.value[m.cursor:m.cursor+1]),
-			text.Render(m.value[m.cursor+1:]),
+			text.Render(value[:at]),
+			cursor.Render(value[at:at+1]),
+			text.Render(value[at+1:]),
 		)
 	}
 	return m.fill(strings.Join(parts, ""), base)
+}
+
+// scrollStart returns the offset of the visible window, keeping the cursor
+// inside it: the stored offset is kept while the cursor remains in view and
+// shifted the minimal amount when the cursor walks past either edge.
+func (m Model) scrollStart() int {
+	if m.width <= 0 {
+		return 0
+	}
+	start := m.offset
+	// The rightmost cursor column: the caret needs its own cell when sitting
+	// past the end of the value, so the cursor may be at most width-1 in.
+	if m.cursor-start > m.width-1 {
+		start = m.cursor - (m.width - 1)
+	}
+	if m.cursor < start {
+		start = m.cursor
+	}
+	return max(0, start)
+}
+
+// visibleWindow returns the slice of the value that fits the configured width
+// with the cursor kept in view, and the cursor's index within that slice. With
+// no width configured it is the whole value.
+func (m Model) visibleWindow() (string, int) {
+	if m.width <= 0 {
+		return m.value, m.cursor
+	}
+	start := m.scrollStart()
+	end := min(len(m.value), start+m.width)
+	return m.value[start:end], m.cursor - start
+}
+
+// clipTo truncates value to width characters; zero width means unlimited.
+func clipTo(value string, width int) string {
+	if width <= 0 || len(value) <= width {
+		return value
+	}
+	return value[:width]
 }
 
 // fill pads the rendered content out to the configured width with

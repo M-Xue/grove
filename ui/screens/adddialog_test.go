@@ -48,7 +48,7 @@ func TestCtrlAOpensAddDialog(t *testing.T) {
 	if !strings.Contains(view, "Add worktree") {
 		t.Fatalf("expected the add dialog title in the view, got:\n%s", view)
 	}
-	if !strings.Contains(view, "Path") || !strings.Contains(view, "Branch") {
+	if !strings.Contains(view, "Current path") || !strings.Contains(view, "Relative path") || !strings.Contains(view, "Branch") {
 		t.Fatalf("expected both field labels in the view, got:\n%s", view)
 	}
 }

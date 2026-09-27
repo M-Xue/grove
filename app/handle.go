@@ -1,5 +1,7 @@
 package app
 
+import "github.com/M-Xue/grove/branch"
+
 // HandleMessage applies a completed Command's Message to state and may return
 // the next Command to chain. It is an inspectable switch so app tests can drive
 // it directly.
@@ -32,6 +34,18 @@ func (a *App) HandleMessage(message Message) Command {
 	case BranchCheckFailedMessage:
 		a.clearLoadingEntry(msg.LoadingID)
 		a.appendStatus(StatusError, msg.Err.Error())
+		return nil
+	case BranchCommitsLoadedMessage:
+		// Hover-driven lookup: a failure (e.g. the branch was just deleted)
+		// simply leaves the panel without commits rather than spamming the
+		// status line on every selection move.
+		if msg.Err != nil {
+			return nil
+		}
+		if a.state.BranchCommits == nil {
+			a.state.BranchCommits = make(map[string][]branch.CommitInfo)
+		}
+		a.state.BranchCommits[msg.Branch] = msg.Commits
 		return nil
 	case WorktreeProgressMessage:
 		a.updateLoadingProgress(msg.LoadingID, msg.Done, msg.Total)
