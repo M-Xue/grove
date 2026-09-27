@@ -1,6 +1,11 @@
 package app
 
-import "github.com/M-Xue/grove/branch"
+import (
+	"errors"
+
+	"github.com/M-Xue/grove/branch"
+	"github.com/M-Xue/grove/pr"
+)
 
 // HandleMessage applies a completed Command's Message to state and may return
 // the next Command to chain. It is an inspectable switch so app tests can drive
@@ -36,16 +41,42 @@ func (a *App) HandleMessage(message Message) Command {
 		a.appendStatus(StatusError, msg.Err.Error())
 		return nil
 	case BranchCommitsLoadedMessage:
-		// Hover-driven lookup: a failure (e.g. the branch was just deleted)
-		// simply leaves the panel without commits rather than spamming the
-		// status line on every selection move.
-		if msg.Err != nil {
-			return nil
-		}
 		if a.state.BranchCommits == nil {
 			a.state.BranchCommits = make(map[string][]branch.CommitInfo)
 		}
-		a.state.BranchCommits[msg.Branch] = msg.Commits
+		if msg.Err != nil {
+			// Hover-driven lookup: a failure (e.g. the branch was just
+			// deleted) is not worth a status-line entry. An empty result is
+			// recorded when nothing is loaded yet so the details panel’s
+			// spinner resolves; a failed refresh keeps the old commits.
+			if _, loaded := a.state.BranchCommits[msg.Branch]; !loaded {
+				a.state.BranchCommits[msg.Branch] = nil
+			}
+		} else {
+			a.state.BranchCommits[msg.Branch] = msg.Commits
+		}
+		// Chain the branch’s PR lookup off its commits load: every hover that
+		// fetches commits thereby fetches the PR too, without the UI issuing a
+		// second command. LoadBranchPR’s own caching keeps this from repeating.
+		return a.LoadBranchPR(msg.Branch)
+	case BranchPRLoadedMessage:
+		if a.state.BranchPRs == nil {
+			a.state.BranchPRs = make(map[string]BranchPR)
+		}
+		if msg.Err != nil {
+			// An environmental failure (gh missing, unauthenticated, no GitHub
+			// remote) latches the kill switch so grove stops asking. A
+			// transient failure is recorded as a failed entry — the details
+			// panel resolves its spinner and says so — but stays uncached in
+			// LoadBranchPR’s eyes, so a later hover of the branch retries.
+			if errors.Is(msg.Err, pr.ErrUnavailable) {
+				a.state.PRLookupUnavailable = true
+				return nil
+			}
+			a.state.BranchPRs[msg.Branch] = BranchPR{Failed: true}
+			return nil
+		}
+		a.state.BranchPRs[msg.Branch] = BranchPR{Found: msg.Found, Info: msg.Info}
 		return nil
 	case WorktreeProgressMessage:
 		a.updateLoadingProgress(msg.LoadingID, msg.Done, msg.Total)

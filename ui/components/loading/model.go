@@ -23,6 +23,12 @@ func (m *Model) Tick() {
 	m.frame = (m.frame + 1) % len(spinnerFrames)
 }
 
+// Frame returns the spinner glyph for tick index i, so other parts of the UI
+// can render a spinner in step with the loading area's.
+func Frame(i int) string {
+	return spinnerFrames[i%len(spinnerFrames)]
+}
+
 func (m Model) View(entries []app.LoadingEntry, width int) []string {
 	style := lipgloss.NewStyle().Foreground(lipgloss.Color("117")).Bold(true)
 	lines := make([]string, 0, len(entries))

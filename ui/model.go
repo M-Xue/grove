@@ -104,11 +104,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// closes after the terminal message.
 		return m, tea.Batch(m.run(next), reaction, readStream(msg.ch), m.ensureSpinner())
 	case spinnerTickMsg:
-		if !m.hasActiveLoading() {
+		if !m.hasSpinnerWork() {
 			m.spinning = false
 			return m, nil
 		}
 		m.loading.Tick()
+		m.change.TickSpinner()
 		return m, spinnerTick()
 	case tea.KeyMsg:
 		m.app.DismissCompletedLoading()
@@ -160,10 +161,16 @@ func (m *Model) hasActiveLoading() bool {
 	return false
 }
 
-// ensureSpinner starts the spinner tick loop when there is active loading work
-// and the loop is not already running, guaranteeing a single loop at a time.
+// hasSpinnerWork reports whether anything on screen still animates a spinner:
+// an active loading entry, or a details-panel fetch (commits/PR) in flight.
+func (m *Model) hasSpinnerWork() bool {
+	return m.hasActiveLoading() || m.change.DetailsPending(m.app.State())
+}
+
+// ensureSpinner starts the spinner tick loop when there is spinner work and
+// the loop is not already running, guaranteeing a single loop at a time.
 func (m *Model) ensureSpinner() tea.Cmd {
-	if m.spinning || !m.hasActiveLoading() {
+	if m.spinning || !m.hasSpinnerWork() {
 		return nil
 	}
 	m.spinning = true

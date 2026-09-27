@@ -61,6 +61,32 @@ func (r Runner) CombinedOutput(name string, args ...string) ([]byte, error) {
 	return output, nil
 }
 
+// Output runs name with args under a timeout and returns stdout alone, keeping
+// stderr out of the result so machine-parsed output (e.g. JSON) is never
+// corrupted by advisory notices the tool writes to stderr. On failure, stderr
+// is folded into the returned error's text instead.
+func (r Runner) Output(name string, args ...string) ([]byte, error) {
+	timeout := r.timeout
+	if timeout <= 0 {
+		timeout = DefaultTimeout
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, name, args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	output, err := cmd.Output()
+	if err != nil {
+		message := strings.TrimSpace(stderr.String())
+		if message == "" {
+			return nil, err
+		}
+		return nil, fmt.Errorf("%w: %s", err, message)
+	}
+	return output, nil
+}
+
 // StreamProgress runs name with args under StreamTimeout and invokes onLine for
 // each progress token written to stderr. git separates in-place progress
 // updates with carriage returns rather than newlines, so tokens are split on

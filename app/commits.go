@@ -1,7 +1,9 @@
 package app
 
-// recentCommitLimit is how many commits the details panel shows per branch.
-const recentCommitLimit = 5
+// RecentCommitLimit is how many commits the details panel shows per branch.
+// Exported so the panel can reserve exactly this many rows and keep the
+// sections beneath it from shifting as commits load.
+const RecentCommitLimit = 5
 
 // LoadBranchCommits fetches the recent commits of the named branch for the
 // details panel. It is hover-driven and fires on every selection change, so it
@@ -14,7 +16,7 @@ func (a *App) LoadBranchCommits(name string) Command {
 	}
 	branches := a.services.Branch
 	return func() Message {
-		commits, err := branches.RecentCommits(name, recentCommitLimit)
+		commits, err := branches.RecentCommits(name, RecentCommitLimit)
 		return BranchCommitsLoadedMessage{Branch: name, Commits: commits, Err: err}
 	}
 }

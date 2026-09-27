@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/M-Xue/grove/branch"
+	"github.com/M-Xue/grove/pr"
 	"github.com/M-Xue/grove/worktree"
 )
 
@@ -14,6 +15,19 @@ const (
 type Services struct {
 	Worktree worktree.Service
 	Branch   branch.Service
+	PR       pr.Service
+}
+
+// BranchPR is the cached result of one branch's pull-request lookup. Found
+// distinguishes a definitive "this branch has no PR" from a branch that simply
+// has no map entry yet (not fetched).
+type BranchPR struct {
+	Found bool
+	Info  pr.Info
+	// Failed records a transient lookup failure. The entry exists so the UI
+	// can resolve its pending state (and say the lookup failed), but
+	// LoadBranchPR treats it as uncached so a later hover retries.
+	Failed bool
 }
 
 type LoadingEntry struct {
@@ -43,8 +57,16 @@ type State struct {
 	// short branch name. Entries are filled lazily as the change screen hovers
 	// worktrees and overwritten wholesale when a fetch for that branch lands.
 	BranchCommits map[string][]branch.CommitInfo
-	Loading       []LoadingEntry
-	Statuses      []StatusEntry
+	// BranchPRs caches pull-request lookups per branch for the session: a PR
+	// lookup is a network round-trip, so unlike commits it is fetched at most
+	// once per branch and never refreshed on worktree reloads.
+	BranchPRs map[string]BranchPR
+	// PRLookupUnavailable is latched when a lookup reports pr.ErrUnavailable
+	// (gh missing, unauthenticated, or no GitHub remote); no further lookups
+	// are issued for the rest of the session.
+	PRLookupUnavailable bool
+	Loading             []LoadingEntry
+	Statuses            []StatusEntry
 
 	Change ChangeState
 }

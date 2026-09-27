@@ -6,6 +6,7 @@ import (
 
 	"github.com/M-Xue/grove/app"
 	"github.com/M-Xue/grove/branch"
+	"github.com/M-Xue/grove/ui/components/loading"
 	"github.com/M-Xue/grove/ui/components/panel"
 	"github.com/M-Xue/grove/ui/components/selectlist"
 	"github.com/M-Xue/grove/ui/components/textinput"
@@ -38,6 +39,10 @@ type ChangeScreen struct {
 	// commitsBranch is the branch whose recent commits were last requested, so
 	// hover moves that land on the same branch do not refetch.
 	commitsBranch string
+	// spinnerFrame indexes the loading spinner shown next to a details-panel
+	// heading while its fetch is in flight; the model ticks it on the shared
+	// spinner timer.
+	spinnerFrame int
 }
 
 // staleColor is the ANSI escape used to dim stale worktrees in the list.
@@ -158,6 +163,43 @@ func (s *ChangeScreen) fetchHoveredCommits() app.Command {
 	return s.app.LoadBranchCommits(worktree.branch)
 }
 
+// TickSpinner advances the details-panel spinner one frame. The model drives
+// it on the same timer as the loading area, so all spinners animate in step.
+func (s *ChangeScreen) TickSpinner() {
+	s.spinnerFrame++
+}
+
+// DetailsPending reports whether the hovered worktree still has a details
+// fetch in flight (commits or PR), so the model knows to keep the spinner
+// timer running. Every fetch outcome — success, no result, failure,
+// unavailability — resolves its map entry, so pending states cannot linger.
+func (s *ChangeScreen) DetailsPending(state app.State) bool {
+	worktree, ok := s.hoveredWorktree()
+	if !ok || worktree.branch == "" {
+		return false
+	}
+	return commitsPending(state, worktree.branch) || prPending(state, worktree.branch)
+}
+
+func commitsPending(state app.State, branchName string) bool {
+	_, loaded := state.BranchCommits[branchName]
+	return !loaded
+}
+
+func prPending(state app.State, branchName string) bool {
+	if state.PRLookupUnavailable {
+		return false
+	}
+	_, resolved := state.BranchPRs[branchName]
+	return !resolved
+}
+
+// spinner renders the current spinner frame in the loading area's accent, for
+// details-panel headings whose fetch is still in flight.
+func (s *ChangeScreen) spinner() string {
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("117")).Bold(true).Render(loading.Frame(s.spinnerFrame))
+}
+
 // hoveredWorktree resolves the list's current selection to its worktree.
 func (s *ChangeScreen) hoveredWorktree() (appWorktree, bool) {
 	item, ok := s.list.SelectedItem()
@@ -196,7 +238,7 @@ func (s *ChangeScreen) View(width, height int, state app.State) string {
 	// keyboard; dialogs render their own active border.
 	worktreesActive := !s.confirm.active && !s.addDlg.active
 	left := strings.Split(panel.Render("Worktrees", interior, leftWidth, panelHeight, worktreesActive), "\n")
-	right := strings.Split(panel.Render("Branch Details", s.detailsView(rightWidth-4, state.BranchCommits), rightWidth, panelHeight, false), "\n")
+	right := strings.Split(panel.Render("Branch Details", s.detailsView(rightWidth-4, state), rightWidth, panelHeight, false), "\n")
 	rows := make([]string, 0, panelHeight)
 	for i := 0; i < panelHeight; i++ {
 		leftRow, rightRow := "", ""
@@ -231,12 +273,13 @@ func commitAuthor(text string) string {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color("183")).Render(text)
 }
 
-// detailsView renders the Branch details panel content for the worktree
+// detailsView renders the Branch Details panel content for the worktree
 // currently hovered in the list, mirroring the left panel's blank line under
-// the title: the branch and path, then the branch's recent commits. Empty when
-// the list has no selection (e.g. no search matches). width is the panel
-// interior available to content; values wrap within it.
-func (s *ChangeScreen) detailsView(width int, commits map[string][]branch.CommitInfo) string {
+// the title: the branch and path, the branch's pull request (when one is
+// known), then its recent commits. Empty when the list has no selection (e.g.
+// no search matches). width is the panel interior available to content; values
+// wrap within it.
+func (s *ChangeScreen) detailsView(width int, state app.State) string {
 	worktree, ok := s.hoveredWorktree()
 	if !ok {
 		return ""
@@ -244,9 +287,50 @@ func (s *ChangeScreen) detailsView(width int, commits map[string][]branch.Commit
 	lines := []string{""}
 	lines = append(lines, detailRow("Branch:", worktree.branch, width)...)
 	lines = append(lines, detailRow("Path:", worktree.id, width)...)
-	lines = append(lines, "", detailLabel("Commits"))
-	lines = append(lines, commitRows(commits[worktree.branch])...)
+	// Both section headings are always present so the panel's shape is stable;
+	// a heading whose fetch is still in flight carries a spinner instead of
+	// appearing only once its data lands.
+	commitsHeading := detailLabel("Commits")
+	if worktree.branch != "" && commitsPending(state, worktree.branch) {
+		commitsHeading += " " + s.spinner()
+	}
+	lines = append(lines, "", commitsHeading)
+	// The commits section always occupies its full row budget — blank rows
+	// stand in while loading (or when the branch has fewer commits) — so the
+	// PR section beneath it never shifts as data lands.
+	rows := commitRows(state.BranchCommits[worktree.branch])
+	for len(rows) < app.RecentCommitLimit {
+		rows = append(rows, "")
+	}
+	lines = append(lines, rows...)
+	lines = append(lines, "")
+	lines = append(lines, s.prSection(worktree.branch, state, width)...)
 	return strings.Join(lines, "\n")
+}
+
+// prSection renders the PR part of the details panel. The heading is always
+// shown; beneath it comes whichever the lookup has produced — a spinner while
+// in flight, the PR's details, or a plain note for the no-PR, failed, and
+// unavailable outcomes.
+func (s *ChangeScreen) prSection(branchName string, state app.State, width int) []string {
+	heading := detailLabel(prHeaderIcon + " PR")
+	if branchName == "" {
+		return []string{heading, "No PR available"}
+	}
+	if state.PRLookupUnavailable {
+		return []string{heading, "PR lookup unavailable"}
+	}
+	entry, resolved := state.BranchPRs[branchName]
+	switch {
+	case !resolved:
+		return []string{heading + " " + s.spinner()}
+	case entry.Failed:
+		return []string{heading, "PR lookup failed"}
+	case !entry.Found:
+		return []string{heading, "No PR available"}
+	default:
+		return append([]string{heading}, prRows(entry.Info, width)...)
+	}
 }
 
 // detailRowLabelWidth is the column detail labels are padded to, so the values

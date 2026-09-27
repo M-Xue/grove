@@ -16,7 +16,7 @@ type stubBranchService struct {
 
 func (s *stubBranchService) RecentCommits(name string, limit int) ([]branch.CommitInfo, error) {
 	s.called = append(s.called, name)
-	if limit != recentCommitLimit {
+	if limit != RecentCommitLimit {
 		return nil, errors.New("unexpected limit")
 	}
 	return s.commits, s.err
@@ -54,7 +54,7 @@ func TestLoadBranchCommitsSkipsBlankBranchAndMissingService(t *testing.T) {
 	}
 }
 
-func TestLoadBranchCommitsIgnoresErrorsSilently(t *testing.T) {
+func TestLoadBranchCommitsErrorResolvesQuietlyAsEmpty(t *testing.T) {
 	service := &stubBranchService{err: errors.New("boom")}
 	a := New(Services{Branch: service})
 
@@ -65,7 +65,23 @@ func TestLoadBranchCommitsIgnoresErrorsSilently(t *testing.T) {
 	if len(a.State().Statuses) != 0 {
 		t.Fatalf("expected no status entries, got %#v", a.State().Statuses)
 	}
-	if _, ok := a.State().BranchCommits["feature"]; ok {
-		t.Fatal("expected no commits stored on error")
+	// The failure resolves as an empty entry (so the panel's pending state
+	// clears) rather than being surfaced or left unresolved.
+	commits, resolved := a.State().BranchCommits["feature"]
+	if !resolved || len(commits) != 0 {
+		t.Fatalf("expected an empty resolved entry, got %#v resolved=%v", commits, resolved)
+	}
+}
+
+func TestLoadBranchCommitsFailedRefreshKeepsOldCommits(t *testing.T) {
+	commits := []branch.CommitInfo{{Hash: "abc123", Author: "Max", Subject: "Add auth flow"}}
+	service := &stubBranchService{commits: commits}
+	a := New(Services{Branch: service})
+	a.HandleMessage(a.LoadBranchCommits("feature")())
+
+	service.commits, service.err = nil, errors.New("boom")
+	a.HandleMessage(a.LoadBranchCommits("feature")())
+	if got := a.State().BranchCommits["feature"]; !reflect.DeepEqual(got, commits) {
+		t.Fatalf("expected the failed refresh to keep old commits, got %#v", got)
 	}
 }
