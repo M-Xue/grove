@@ -9,6 +9,7 @@ import (
 	"github.com/M-Xue/grove/cache"
 	"github.com/M-Xue/grove/cli"
 	"github.com/M-Xue/grove/command"
+	"github.com/M-Xue/grove/pr"
 	"github.com/M-Xue/grove/repo"
 	"github.com/M-Xue/grove/ui"
 	"github.com/M-Xue/grove/worktree"
@@ -34,6 +35,7 @@ func main() {
 	application := app.New(app.Services{
 		Worktree: worktree.NewService(runner),
 		Branch:   branch.NewService(runner),
+		PR:       pr.NewService(runner),
 	}, options...)
 
 	// The TUI renders to stderr, but lipgloss's global default renderer detects

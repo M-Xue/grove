@@ -151,11 +151,12 @@ the common case) rather than another bypass.
   on a big repo. The SWR cache treats the symptom. Options: run the
   per-worktree probes concurrently (they're independent), and/or degrade
   gracefully (paint paths/branches first, fill dirty-state later).
-- **`CombinedOutput` feeds parsers** (`command/command.go:44-62`): stdout and
+- **`CombinedOutput` feeds parsers** (`command/command.go`): stdout and
   stderr are merged, so any git warning/advice line (ownership warnings,
   advice hints) lands in the input of `parseWorktreeList` and `BranchExists`'s
-  string equality. Machine-parsed commands should capture stdout alone,
-  keeping stderr for the error message.
+  string equality. The stdout-only `Runner.Output` now exists (added for the
+  `pr` service, whose JSON parsing cannot tolerate stderr noise); migrating
+  `worktree.List` and `BranchExists` onto it remains open.
 - Vestigial API surface: `worktree.Service.Add` / `AddWithNewBranch` are used
   only by tests (production uses `AddWithProgress` only —
   `app/operations.go`); `selectlist.VisibleItems` has no callers at all. Trim.
@@ -194,9 +195,9 @@ Each step should leave `go build ./... && go vet ./... && go test ./...` green.
 2. **D1** Remote-aware branch existence check + "create tracking branch" flow.
 
 ### Phase 2 — Structural fixes with best payoff/risk
-3. **Runner split** (git layer): add a stdout-only runner method for
-   machine-parsed commands; keep stderr for error text. Migrate
-   `worktree.List` and `BranchExists` to it.
+3. **Runner split** (git layer): the stdout-only `command.Output` now exists
+   (added for the `pr` service). Remaining: migrate `worktree.List` and
+   `BranchExists` to it.
 4. **S2** Supersession guard for worktree-list loads (protects the cache from
    stale writes too).
 

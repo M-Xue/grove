@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/M-Xue/grove/branch"
+	"github.com/M-Xue/grove/pr"
 	"github.com/M-Xue/grove/worktree"
 )
 
@@ -75,6 +76,16 @@ type BranchCommitsLoadedMessage struct {
 	Branch  string
 	Commits []branch.CommitInfo
 	Err     error
+}
+
+// BranchPRLoadedMessage carries the pull-request lookup result for one branch.
+// Like the commits fetch it is a silent background lookup with no LoadingID.
+// Found=false with a nil Err is the ordinary "no PR for this branch" outcome.
+type BranchPRLoadedMessage struct {
+	Branch string
+	Info   pr.Info
+	Found  bool
+	Err    error
 }
 
 type WorktreeRemovedMessage struct {

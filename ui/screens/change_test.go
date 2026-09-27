@@ -7,6 +7,8 @@ import (
 
 	"github.com/M-Xue/grove/app"
 	"github.com/M-Xue/grove/branch"
+	"github.com/M-Xue/grove/pr"
+	"github.com/M-Xue/grove/ui/components/loading"
 	"github.com/M-Xue/grove/worktree"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -134,5 +136,167 @@ func TestChangeScreenDetailsPanelShowsHoveredWorktree(t *testing.T) {
 		if !strings.Contains(view, want) {
 			t.Fatalf("expected details panel to contain %q, got:\n%s", want, view)
 		}
+	}
+}
+
+func TestChangeScreenDetailsPanelShowsPRSection(t *testing.T) {
+	s := NewChangeScreen(fakeApp{})
+	state := app.State{
+		Worktrees: []worktree.Info{{Path: "/repo", Branch: "feature"}},
+		BranchPRs: map[string]app.BranchPR{
+			"feature": {Found: true, Info: pr.Info{
+				Number: 2745,
+				Title:  "gate remote annotation URLs",
+				Status: pr.StatusOpen,
+				Author: "chmouel",
+				URL:    "https://github.com/org/repo/pull/2745",
+				Checks: []pr.Check{
+					{Name: "linters", State: pr.CheckPassed},
+					{Name: "e2e tests", State: pr.CheckPending},
+				},
+			}},
+		},
+	}
+	s.Sync(state)
+
+	view := stripAnsiSequences(s.View(140, 40, state))
+
+	// The status pill pads its label with its own spaces, hence " Open ".
+	for _, want := range []string{
+		"PR", "Status:     Open ", "Title:     gate remote annotation URLs",
+		"Author:    chmouel", "URL:       https://github.com/org/repo/pul",
+		"CI Checks: Pending", "linters", "e2e tests",
+	} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("expected details panel to contain %q, got:\n%s", want, view)
+		}
+	}
+}
+
+func TestChangeScreenDetailsPanelNotesWhenBranchHasNoPR(t *testing.T) {
+	s := NewChangeScreen(fakeApp{})
+	state := app.State{
+		Worktrees: []worktree.Info{{Path: "/repo", Branch: "feature"}},
+		// A definitive "no PR" lookup result: header plus a plain note, no
+		// PR fields.
+		BranchPRs: map[string]app.BranchPR{"feature": {Found: false}},
+	}
+	s.Sync(state)
+
+	view := stripAnsiSequences(s.View(140, 40, state))
+	if !strings.Contains(view, "No PR available") {
+		t.Fatalf("expected the no-PR note, got:\n%s", view)
+	}
+	if strings.Contains(view, "Status:") || strings.Contains(view, "CI Checks:") {
+		t.Fatalf("expected no PR fields without a PR, got:\n%s", view)
+	}
+}
+
+func TestChangeScreenDetailsPanelOmitsPRSectionBeforeLookup(t *testing.T) {
+	s := NewChangeScreen(fakeApp{})
+	state := app.State{Worktrees: []worktree.Info{{Path: "/repo", Branch: "feature"}}}
+	s.Sync(state)
+
+	view := stripAnsiSequences(s.View(140, 40, state))
+	if strings.Contains(view, "No PR available") || strings.Contains(view, "Status:") {
+		t.Fatalf("expected no PR section before the lookup resolves, got:\n%s", view)
+	}
+}
+
+func TestChangeScreenDetailsPanelShowsNoneForEmptyChecks(t *testing.T) {
+	s := NewChangeScreen(fakeApp{})
+	state := app.State{
+		Worktrees: []worktree.Info{{Path: "/repo", Branch: "feature"}},
+		BranchPRs: map[string]app.BranchPR{
+			"feature": {Found: true, Info: pr.Info{Number: 3, Title: "t", Status: pr.StatusOpen, Author: "max", URL: "u"}},
+		},
+	}
+	s.Sync(state)
+
+	view := stripAnsiSequences(s.View(140, 40, state))
+	if !strings.Contains(view, "CI Checks: None") {
+		t.Fatalf("expected the empty rollup to render as None, got:\n%s", view)
+	}
+}
+
+func TestChangeScreenDetailsHeadingsSpinWhileFetching(t *testing.T) {
+	s := NewChangeScreen(fakeApp{})
+	// Worktrees are known but neither the commits nor the PR lookup has
+	// resolved: both headings are present, each with the spinner frame.
+	state := app.State{Worktrees: []worktree.Info{{Path: "/repo", Branch: "feature"}}}
+	s.Sync(state)
+
+	if !s.DetailsPending(state) {
+		t.Fatal("expected details to be pending before any fetch resolves")
+	}
+	view := stripAnsiSequences(s.View(140, 40, state))
+	frame := loading.Frame(0)
+	for _, want := range []string{"Commits " + frame, "PR " + frame} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("expected heading with spinner %q, got:\n%s", want, view)
+		}
+	}
+
+	// Once both lookups resolve, the spinners disappear and pending clears.
+	state.BranchCommits = map[string][]branch.CommitInfo{"feature": nil}
+	state.BranchPRs = map[string]app.BranchPR{"feature": {Found: false}}
+	s.Sync(state)
+	if s.DetailsPending(state) {
+		t.Fatal("expected no pending details once both lookups resolved")
+	}
+	view = stripAnsiSequences(s.View(140, 40, state))
+	if strings.Contains(view, frame) {
+		t.Fatalf("expected no spinner after resolution, got:\n%s", view)
+	}
+}
+
+func TestChangeScreenPRSectionNotesFailureAndUnavailability(t *testing.T) {
+	s := NewChangeScreen(fakeApp{})
+
+	failed := app.State{
+		Worktrees: []worktree.Info{{Path: "/repo", Branch: "feature"}},
+		BranchPRs: map[string]app.BranchPR{"feature": {Failed: true}},
+	}
+	s.Sync(failed)
+	if view := stripAnsiSequences(s.View(140, 40, failed)); !strings.Contains(view, "PR lookup failed") {
+		t.Fatalf("expected the failed note, got:\n%s", view)
+	}
+
+	unavailable := app.State{
+		Worktrees:           []worktree.Info{{Path: "/repo", Branch: "feature"}},
+		PRLookupUnavailable: true,
+	}
+	s.Sync(unavailable)
+	if s.DetailsPending(unavailable) && len(unavailable.BranchCommits) != 0 {
+		t.Fatal("unexpected pending state")
+	}
+	if view := stripAnsiSequences(s.View(140, 40, unavailable)); !strings.Contains(view, "PR lookup unavailable") {
+		t.Fatalf("expected the unavailable note, got:\n%s", view)
+	}
+}
+
+func TestChangeScreenPRSectionPositionIsStableWhileCommitsLoad(t *testing.T) {
+	s := NewChangeScreen(fakeApp{})
+	pending := app.State{Worktrees: []worktree.Info{{Path: "/repo", Branch: "feature"}}}
+	loaded := app.State{
+		Worktrees: []worktree.Info{{Path: "/repo", Branch: "feature"}},
+		BranchCommits: map[string][]branch.CommitInfo{
+			"feature": {{Hash: "abc123", Author: "Max", Subject: "one"}, {Hash: "def456", Author: "Max", Subject: "two"}},
+		},
+	}
+
+	prLine := func(state app.State) int {
+		s.Sync(state)
+		for i, line := range strings.Split(stripAnsiSequences(s.View(140, 40, state)), "\n") {
+			if strings.Contains(line, " PR") {
+				return i
+			}
+		}
+		return -1
+	}
+
+	before, after := prLine(pending), prLine(loaded)
+	if before == -1 || before != after {
+		t.Fatalf("expected the PR heading to stay on the same row, got %d then %d", before, after)
 	}
 }
