@@ -1,7 +1,10 @@
 package screens
 
 import (
+	"strings"
+
 	"github.com/M-Xue/grove/app"
+	"github.com/M-Xue/grove/ui/components/buttongroup"
 	"github.com/M-Xue/grove/ui/components/dialog"
 	"github.com/M-Xue/grove/ui/keys"
 	"github.com/charmbracelet/bubbles/help"
@@ -42,6 +45,8 @@ type Mode int
 const (
 	ModeDefault Mode = iota
 	ModeDialog
+	// ModeAdd is active while the add-worktree input dialog is open.
+	ModeAdd
 )
 
 // ModeBindings is an ordered list of bindings plus a derived key→binding index.
@@ -89,27 +94,32 @@ func (mb ModeBindings) footer(width int) string {
 // Registry is a screen's full set of modes.
 type Registry map[Mode]ModeBindings
 
-// confirmDialog is a screen-owned confirmation dialog. The screen authors the
-// title, description, and button labels (presentation) and supplies the Action
-// to run when the user confirms. app owns no dialog state.
+// confirmDialog is a screen-owned confirmation dialog composed from the shared
+// dialog chrome and a buttongroup. The screen authors the title, description,
+// and button labels (presentation) and supplies the Action to run when the
+// user confirms. app owns no dialog state.
 type confirmDialog struct {
-	model     dialog.Model
-	active    bool
-	onConfirm Action
+	title       string
+	description string
+	buttons     buttongroup.Model
+	active      bool
+	onConfirm   Action
 }
 
 // open configures and shows the dialog with a "confirm" and a "cancel" button.
 // focusConfirm selects which button is focused initially.
 func (d *confirmDialog) open(title, description, confirmLabel string, focusConfirm bool, onConfirm Action) {
-	d.model = dialog.New()
-	d.model.SetTitle(title)
-	d.model.SetDescription(description)
-	d.model.SetButtons([]dialog.Button{{ID: "confirm", Label: confirmLabel}, {ID: "cancel", Label: "Cancel"}})
+	d.title = title
+	d.description = description
+	d.buttons = buttongroup.New(
+		buttongroup.Button{ID: "confirm", Label: confirmLabel},
+		buttongroup.Button{ID: "cancel", Label: "Cancel"},
+	)
 	focus := "cancel"
 	if focusConfirm {
 		focus = "confirm"
 	}
-	d.model.SetFocusedID(focus)
+	d.buttons.SetFocusedID(focus)
 	d.onConfirm = onConfirm
 	d.active = true
 }
@@ -119,15 +129,15 @@ func (d *confirmDialog) close() {
 	d.onConfirm = nil
 }
 
-// move forwards a focus-changing key (tab/shift+tab) to the dialog renderer.
+// move forwards a focus-changing key (tab/shift+tab) to the button group.
 func (d *confirmDialog) move(msg tea.KeyMsg) {
-	d.model.Update(msg)
+	d.buttons.Update(msg)
 }
 
 // confirm resolves the dialog: it runs the stored action when the confirm
 // button is focused, or simply closes when cancel is focused.
 func (d *confirmDialog) confirm(actx *ActionCtx) app.Command {
-	id, _ := d.model.FocusedID()
+	id, _ := d.buttons.FocusedID()
 	onConfirm := d.onConfirm
 	d.close()
 	if id == "cancel" || onConfirm == nil {
@@ -137,7 +147,14 @@ func (d *confirmDialog) confirm(actx *ActionCtx) app.Command {
 }
 
 func (d *confirmDialog) view(width, height int) string {
-	return d.model.View(width, height)
+	// The title renders as a tab in the frame's border; only the description
+	// (when present) and the buttons are content.
+	var lines []string
+	if d.description != "" {
+		lines = append(lines, d.description, "")
+	}
+	lines = append(lines, d.buttons.View())
+	return dialog.Frame(d.title, strings.Join(lines, "\n"), width)
 }
 
 func NewHelpModel() help.Model {

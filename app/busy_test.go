@@ -4,7 +4,7 @@ import "testing"
 
 func TestIsBusyTrueForBlockingLoading(t *testing.T) {
 	a := New(Services{})
-	a.setBlockingLoading("deleting branch")
+	a.setBlockingLoading("removing worktree")
 	if !a.State().IsBusy() {
 		t.Fatal("expected IsBusy true while a blocking op is in flight")
 	}
@@ -28,7 +28,7 @@ func TestIsBusyTrueForProgressLoading(t *testing.T) {
 
 func TestIsBusyFalseOnceBlockingDone(t *testing.T) {
 	a := New(Services{})
-	id := a.setBlockingLoading("fetching branches")
+	id := a.setBlockingLoading("removing worktree")
 	a.markLoadingDone(id)
 	if a.State().IsBusy() {
 		t.Fatal("expected IsBusy false once the blocking op completes")
@@ -44,13 +44,8 @@ func TestOperationBlockingClassification(t *testing.T) {
 		start    func(*App)
 		blocking bool
 	}{
-		{"checkout", func(a *App) { a.RequestCheckoutBranch("feature/a") }, true},
-		{"delete branch", func(a *App) { a.DeleteBranch("feature/a") }, true},
-		{"delete all branches", func(a *App) { a.DeleteAllBranches() }, true},
-		{"fetch branches", func(a *App) { a.RequestFetchBranches() }, true},
 		{"remove worktree", func(a *App) { a.RemoveWorktree("/repo") }, true},
-		{"select branch (commits)", func(a *App) { a.SelectBranch("feature/a") }, false},
-		{"toggle scope", func(a *App) { a.RequestToggleBranchScope() }, false},
+		{"check branch exists", func(a *App) { a.RequestAddWorktree("../repo", "feature/a") }, true},
 	}
 
 	for _, test := range tests {

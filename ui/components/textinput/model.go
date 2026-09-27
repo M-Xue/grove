@@ -3,14 +3,19 @@ package textinput
 import (
 	"strings"
 
+	"github.com/M-Xue/grove/ui/theme"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
-const (
-	placeholderColor = "\x1b[38;5;245m"
-	focusColor       = "\x1b[38;5;183m"
-	cursorColor      = "\x1b[7m"
-	resetColor       = "\x1b[0m"
+// The input renders on a darker field background so it reads as a textbox.
+// When a width is set the background fills the whole field, not just the text.
+var (
+	fieldBg    = lipgloss.Color("#1e2030")
+	valueColor = lipgloss.Color("252")
+	// The placeholder shares the inactive-border color so hint text and idle
+	// chrome read as one muted layer.
+	placeholderColor = theme.BorderInactive
 )
 
 type Model struct {
@@ -19,6 +24,7 @@ type Model struct {
 	focused     bool
 	disabled    bool
 	cursor      int
+	width       int
 }
 
 func New(placeholder string) Model {
@@ -26,19 +32,30 @@ func New(placeholder string) Model {
 }
 
 func (m *Model) SetPlaceholder(value string) { m.placeholder = value }
+
 func (m *Model) SetValue(value string) {
 	m.value = filterASCII(value)
 	m.cursor = len(m.value)
 }
+
 func (m Model) Value() string { return m.value }
+
 func (m *Model) Clear() {
 	m.value = ""
 	m.cursor = 0
 }
-func (m *Model) Focus()             { m.focused = true }
-func (m *Model) Blur()              { m.focused = false }
-func (m Model) Focused() bool       { return m.focused }
+
+func (m *Model) Focus() { m.focused = true }
+
+func (m *Model) Blur() { m.focused = false }
+
+func (m Model) Focused() bool { return m.focused }
+
 func (m *Model) SetDisabled(v bool) { m.disabled = v }
+
+// SetWidth fixes the rendered field width in display cells; the background is
+// padded out to it. Zero (the default) renders at the content's natural width.
+func (m *Model) SetWidth(width int) { m.width = width }
 
 func (m *Model) Update(msg tea.KeyMsg) (bool, tea.Cmd) {
 	if !m.focused || m.disabled {
@@ -88,34 +105,56 @@ func (m *Model) Update(msg tea.KeyMsg) (bool, tea.Cmd) {
 }
 
 func (m Model) View() string {
+	base := lipgloss.NewStyle().Background(fieldBg)
+	text := base.Foreground(valueColor)
+	placeholder := base.Foreground(placeholderColor)
+	// The caret is the value color and field background reversed, so it reads
+	// as a light block regardless of the terminal's default colors. It is the
+	// field's only focus indicator.
+	cursor := base.Foreground(valueColor).Reverse(true)
+
+	var parts []string
 	if m.disabled {
-		// Inert: no focus prefix, no caret, value dimmed to grey so the field
+		// Inert: no caret, value dimmed to the placeholder color so the field
 		// visibly reads as read-only while an operation is in flight.
-		if m.value == "" {
-			return "  " + placeholderColor + m.placeholder + resetColor
+		content := m.value
+		if content == "" {
+			content = m.placeholder
 		}
-		return "  " + placeholderColor + m.value + resetColor
+		parts = append(parts, placeholder.Render(content))
+		return m.fill(strings.Join(parts, ""), base)
 	}
-	prefix := "  "
-	if m.focused {
-		prefix = focusColor + "> " + resetColor
+
+	switch {
+	case m.value == "" && m.focused:
+		parts = append(parts, cursor.Render(" "), placeholder.Render(m.placeholder))
+	case m.value == "":
+		parts = append(parts, placeholder.Render(m.placeholder))
+	case !m.focused:
+		parts = append(parts, text.Render(m.value))
+	case m.cursor >= len(m.value):
+		parts = append(parts, text.Render(m.value), cursor.Render(" "))
+	default:
+		parts = append(parts,
+			text.Render(m.value[:m.cursor]),
+			cursor.Render(m.value[m.cursor:m.cursor+1]),
+			text.Render(m.value[m.cursor+1:]),
+		)
 	}
-	if m.value == "" {
-		if m.focused {
-			return prefix + cursorColor + " " + resetColor + placeholderColor + m.placeholder + resetColor
-		}
-		return prefix + placeholderColor + m.placeholder + resetColor
+	return m.fill(strings.Join(parts, ""), base)
+}
+
+// fill pads the rendered content out to the configured width with
+// field-background spaces, so the textbox reads as one solid field.
+func (m Model) fill(content string, base lipgloss.Style) string {
+	if m.width <= 0 {
+		return content
 	}
-	if !m.focused {
-		return prefix + m.value
+	gap := m.width - lipgloss.Width(content)
+	if gap <= 0 {
+		return content
 	}
-	if m.cursor >= len(m.value) {
-		return prefix + m.value + cursorColor + " " + resetColor
-	}
-	before := m.value[:m.cursor]
-	at := m.value[m.cursor : m.cursor+1]
-	after := m.value[m.cursor+1:]
-	return prefix + before + cursorColor + at + resetColor + after
+	return content + base.Render(strings.Repeat(" ", gap))
 }
 
 func filterASCII(value string) string {

@@ -47,16 +47,14 @@ const (
 )
 
 type Model struct {
-	app     *app.App
-	width   int
-	height  int
-	screen  app.ScreenID
+	app      *app.App
+	width    int
+	height   int
+	screen   app.ScreenID
 	loading  loading.Model
 	spinning bool
 	status   status.Model
-	change  *screens.ChangeScreen
-	add     *screens.AddScreen
-	branch  *screens.BranchScreen
+	change   *screens.ChangeScreen
 }
 
 func New(application *app.App) *Model {
@@ -66,8 +64,6 @@ func New(application *app.App) *Model {
 		loading: loading.New(),
 		status:  status.New(),
 		change:  screens.NewChangeScreen(application),
-		add:     screens.NewAddScreen(application),
-		branch:  screens.NewBranchScreen(application),
 	}
 }
 
@@ -126,11 +122,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		ctx := m.screenContext()
 		var cmd tea.Cmd
+		// Route by screen ID; ScreenChange is the only screen today, but the
+		// dispatch point stays so a future screen slots in as a new case.
 		switch m.app.State().Screen {
-		case app.ScreenAdd:
-			cmd = m.add.Update(ctx, msg, m.app.State())
-		case app.ScreenBranch:
-			cmd = m.branch.Update(ctx, msg, m.app.State())
 		default:
 			cmd = m.change.Update(ctx, msg, m.app.State())
 		}
@@ -186,10 +180,6 @@ func (m *Model) screenContext() *screens.ScreenContext {
 func (m *Model) deliverMessage(msg app.Message) tea.Cmd {
 	ctx := m.screenContext()
 	switch m.app.State().Screen {
-	case app.ScreenAdd:
-		return m.add.OnMessage(ctx, msg)
-	case app.ScreenBranch:
-		return m.branch.OnMessage(ctx, msg)
 	default:
 		return m.change.OnMessage(ctx, msg)
 	}
@@ -204,19 +194,19 @@ func (m *Model) View() string {
 	loadingLines := expandRenderedLines(m.loading.View(state.Loading, contentWidth))
 	noticeLines := composeNotices(statusLines, loadingLines, contentWidth)
 	contentHeight := max(0, m.height-verticalPadding*2)
-	bodyHeight := max(0, contentHeight-2)
-		var body string
-		switch state.Screen {
-		case app.ScreenAdd:
-			body = m.add.View(contentWidth, bodyHeight, state)
-		case app.ScreenBranch:
-			body = m.branch.View(contentWidth, bodyHeight, state)
-		default:
+	// Reserve three rows beneath the body: a notice row (status/loading lines
+	// bottom-align there instead of over the panels' bottom border), a blank
+	// spacer, and the footer.
+	bodyHeight := max(0, contentHeight-3)
+	var body string
+	switch state.Screen {
+	default:
 		body = m.change.View(contentWidth, bodyHeight, state)
 	}
 	bodyLines := fitBody(body, contentWidth, bodyHeight)
 	lines := make([]string, 0, contentHeight)
 	lines = append(lines, bodyLines...)
+	lines = append(lines, fitBottomLine("", contentWidth)) // notice row
 	lines = append(lines, fitBottomLine("", contentWidth))
 	lines = append(lines, fitBottomLine(footer, contentWidth))
 	for len(lines) < contentHeight {
@@ -253,8 +243,6 @@ func (m *Model) SubmittedPath() string {
 func (m *Model) syncScreens() {
 	state := m.app.State()
 	m.change.Sync(state)
-	m.add.Sync(state)
-	m.branch.Sync(state)
 	m.screen = state.Screen
 }
 
@@ -262,14 +250,8 @@ func (m *Model) syncScreenTransitions(previous, current app.ScreenID) {
 	if previous == current {
 		return
 	}
-	if previous == app.ScreenAdd {
-		m.add.Reset()
-	}
 	if previous == app.ScreenChange {
 		m.change.Reset()
-	}
-	if previous == app.ScreenBranch {
-		m.branch.Reset()
 	}
 }
 
@@ -390,10 +372,6 @@ func (m *Model) footer(contentWidth int, state app.State) string {
 		return "working… ctrl+c quit"
 	}
 	switch state.Screen {
-	case app.ScreenAdd:
-		return m.add.Footer(contentWidth)
-	case app.ScreenBranch:
-		return m.branch.Footer(contentWidth)
 	default:
 		return m.change.Footer(contentWidth)
 	}

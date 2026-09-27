@@ -1,21 +1,22 @@
 package screens
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/M-Xue/grove/app"
+	"github.com/M-Xue/grove/ui/components/panel"
 	"github.com/M-Xue/grove/ui/components/selectlist"
 	"github.com/M-Xue/grove/ui/components/textinput"
 	"github.com/M-Xue/grove/ui/keys"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 // changeApp is the narrow view of app the change screen depends on.
 type changeApp interface {
 	RequestSubmitSelectedPath(path string) app.Command
-	OpenAdd()
-	OpenBranch() app.Command
+	RequestAddWorktree(path, branch string) app.Command
+	CreateBranchWorktree(path, branch string) app.Command
 	RemoveWorktree(path string) app.Command
 	ForceRemoveWorktree(path string) app.Command
 	PruneWorktrees() app.Command
@@ -25,6 +26,7 @@ type changeApp interface {
 type ChangeScreen struct {
 	app       changeApp
 	confirm   confirmDialog
+	addDlg    addDialog
 	search    textinput.Model
 	list      selectlist.Model
 	registry  Registry
@@ -47,7 +49,8 @@ type appWorktree struct {
 func NewChangeScreen(application changeApp) *ChangeScreen {
 	s := &ChangeScreen{
 		app:    application,
-		search: textinput.New("Search worktree paths"),
+		addDlg: newAddDialog(),
+		search: textinput.New(""),
 		list:   selectlist.New("No matches"),
 	}
 	s.search.Focus()
@@ -77,13 +80,32 @@ func (s *ChangeScreen) Sync(state app.State) {
 	s.list.SetItems(items)
 }
 
+// OnMessage reacts to the semantic outcome of the add dialog's branch check:
+// when the branch is absent, it opens the confirm dialog offering to create it.
 func (s *ChangeScreen) OnMessage(ctx *ScreenContext, msg app.Message) tea.Cmd {
+	absent, ok := msg.(app.BranchAbsentMessage)
+	if !ok {
+		return nil
+	}
+	path, branchName := absent.Path, absent.Branch
+	s.confirm.open(
+		"Branch does not exist",
+		fmt.Sprintf("Create a new branch named %q?", branchName),
+		"Create",
+		true,
+		func(actx *ActionCtx) app.Command {
+			return s.app.CreateBranchWorktree(path, branchName)
+		},
+	)
 	return nil
 }
 
 func (s *ChangeScreen) activeMode() Mode {
 	if s.confirm.active {
 		return ModeDialog
+	}
+	if s.addDlg.active {
+		return ModeAdd
 	}
 	return ModeDefault
 }
@@ -92,6 +114,10 @@ func (s *ChangeScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.Stat
 	mode := s.activeMode()
 	if binding, ok := s.registry[mode].lookup(keys.Normalize(msg)); ok {
 		return ctx.Run(binding.Action(&ActionCtx{Key: msg}))
+	}
+	if mode == ModeAdd {
+		_, cmd := s.addDlg.handleKey(msg)
+		return cmd
 	}
 	if mode == ModeDefault {
 		if consumed, cmd := s.search.Update(msg); consumed {
@@ -102,13 +128,48 @@ func (s *ChangeScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.Stat
 	return nil
 }
 
+// panelGap is the number of blank columns between side-by-side panels.
+const panelGap = 1
+
+// searchFieldWidth caps the search field so it reads as a compact input rather
+// than filling the whole panel row.
+const searchFieldWidth = 30
+
 func (s *ChangeScreen) View(width, height int, state app.State) string {
-	header := []string{"grove", "", lipgloss.NewStyle().Bold(true).Render("Change worktree"), "", s.search.View(), ""}
-	body := s.list.View(max(1, height-len(header)))
-	contentLines := append(header, strings.Split(body, "\n")...)
-	content := strings.Join(contentLines, "\n")
+	// App tab, blank line, then the sections boxed lazygit-style: worktrees on
+	// the left two thirds, branch details on the right third.
+	panelHeight := max(2, height-2)
+	leftWidth := max(4, width*2/3)
+	rightWidth := max(0, width-leftWidth-panelGap)
+	// Interior rows: a blank line under the title, the labelled search field,
+	// and a blank line above the list, all inside the borders.
+	listHeight := max(1, panelHeight-5)
+	searchLabel := "Search "
+	s.search.SetWidth(max(0, min(searchFieldWidth, leftWidth-4-len(searchLabel))))
+	searchRow := searchLabel + s.search.View()
+	interior := strings.Join(append([]string{"", searchRow, ""}, strings.Split(s.list.View(listHeight), "\n")...), "\n")
+	// The worktrees panel is the active section whenever no dialog owns the
+	// keyboard; dialogs render their own active border.
+	worktreesActive := !s.confirm.active && !s.addDlg.active
+	left := strings.Split(panel.Render("Worktrees", interior, leftWidth, panelHeight, worktreesActive), "\n")
+	right := strings.Split(panel.Render("Branch details", "", rightWidth, panelHeight, false), "\n")
+	rows := make([]string, 0, panelHeight)
+	for i := 0; i < panelHeight; i++ {
+		leftRow, rightRow := "", ""
+		if i < len(left) {
+			leftRow = left[i]
+		}
+		if i < len(right) {
+			rightRow = right[i]
+		}
+		rows = append(rows, fitLine(leftRow, leftWidth)+strings.Repeat(" ", panelGap)+rightRow)
+	}
+	content := panel.Tab("grove") + "\n\n" + strings.Join(rows, "\n")
 	if s.confirm.active {
 		return overlayDialog(content, s.confirm.view(width, height), width, height)
+	}
+	if s.addDlg.active {
+		return overlayDialog(content, s.addDlg.view(width, height), width, height)
 	}
 	return content
 }
@@ -122,7 +183,6 @@ func (s *ChangeScreen) buildRegistry() Registry {
 		ModeDefault: NewMode(
 			Binding{Keys: []keys.Key{keys.KeyEnter}, Symbol: "enter", Label: "open", Action: s.actionSubmit},
 			Binding{Keys: []keys.Key{keys.KeyCtrlA}, Symbol: "ctrl+a", Label: "add", Action: s.actionOpenAdd},
-			Binding{Keys: []keys.Key{keys.KeyCtrlB}, Symbol: "ctrl+b", Label: "branches", Action: s.actionOpenBranches},
 			Binding{Keys: []keys.Key{keys.KeyCtrlD}, Symbol: "ctrl+d", Label: "remove", Action: s.actionStartRemove},
 			Binding{Keys: []keys.Key{keys.KeyCtrlP}, Symbol: "ctrl+p", Label: "prune", Action: s.actionStartPrune},
 			Binding{Keys: []keys.Key{keys.KeyUp, keys.KeyShiftTab}, Symbol: "↑/shift+tab", Label: "move", Action: s.actionMoveSelection},
@@ -133,6 +193,12 @@ func (s *ChangeScreen) buildRegistry() Registry {
 			Binding{Keys: []keys.Key{keys.KeyEnter}, Symbol: "enter", Label: "confirm", Action: s.actionConfirmDialog},
 			Binding{Keys: []keys.Key{keys.KeyTab, keys.KeyShiftTab}, Symbol: "tab", Label: "move", Action: s.actionDialogMove},
 			Binding{Keys: []keys.Key{keys.KeyEsc}, Symbol: "esc", Label: "cancel", Action: s.actionCancelDialog},
+			Binding{Keys: []keys.Key{keys.KeyCtrlC}, Symbol: "ctrl+c", Label: "quit", Action: s.actionQuit},
+		),
+		ModeAdd: NewMode(
+			Binding{Keys: []keys.Key{keys.KeyEnter}, Symbol: "enter", Label: "submit", Action: s.actionSubmitAdd},
+			Binding{Keys: []keys.Key{keys.KeyTab, keys.KeyShiftTab, keys.KeyUp, keys.KeyDown}, Symbol: "tab", Label: "switch field", Action: s.actionAddSwitchFocus},
+			Binding{Keys: []keys.Key{keys.KeyEsc, keys.KeyCtrlA}, Symbol: "esc", Label: "cancel", Action: s.actionCancelAdd},
 			Binding{Keys: []keys.Key{keys.KeyCtrlC}, Symbol: "ctrl+c", Label: "quit", Action: s.actionQuit},
 		),
 	}
@@ -147,12 +213,30 @@ func (s *ChangeScreen) actionSubmit(actx *ActionCtx) app.Command {
 }
 
 func (s *ChangeScreen) actionOpenAdd(actx *ActionCtx) app.Command {
-	s.app.OpenAdd()
+	s.addDlg.open()
 	return nil
 }
 
-func (s *ChangeScreen) actionOpenBranches(actx *ActionCtx) app.Command {
-	return s.app.OpenBranch()
+// actionSubmitAdd submits the add dialog. The dialog closes only when the app
+// accepts the request (returns a command); a validation failure leaves it open
+// with the typed values intact so the user can correct them.
+func (s *ChangeScreen) actionSubmitAdd(actx *ActionCtx) app.Command {
+	path, branch := s.addDlg.values()
+	cmd := s.app.RequestAddWorktree(path, branch)
+	if cmd != nil {
+		s.addDlg.close()
+	}
+	return cmd
+}
+
+func (s *ChangeScreen) actionCancelAdd(actx *ActionCtx) app.Command {
+	s.addDlg.close()
+	return nil
+}
+
+func (s *ChangeScreen) actionAddSwitchFocus(actx *ActionCtx) app.Command {
+	s.addDlg.switchFocus()
+	return nil
 }
 
 func (s *ChangeScreen) actionStartRemove(actx *ActionCtx) app.Command {
@@ -237,6 +321,7 @@ func (s *ChangeScreen) Reset() {
 	s.search.Clear()
 	s.search.Focus()
 	s.confirm.close()
+	s.addDlg.close()
 	s.list.SetItems(toItems(s.worktrees))
 }
 

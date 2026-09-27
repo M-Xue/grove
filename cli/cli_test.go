@@ -16,29 +16,15 @@ func TestParseInitialScreenDefaultsToChange(t *testing.T) {
 	}
 }
 
-func TestParseInitialScreenSupportsFlags(t *testing.T) {
-	tests := []struct {
-		args []string
-		want app.ScreenID
-	}{
-		{args: []string{"-a"}, want: app.ScreenAdd},
-		{args: []string{"-b"}, want: app.ScreenBranch},
-	}
-
-	for _, test := range tests {
-		screen, err := parseInitialScreen(test.args)
-		if err != nil {
-			t.Fatalf("parseInitialScreen(%v) returned error: %v", test.args, err)
-		}
-		if screen != test.want {
-			t.Fatalf("parseInitialScreen(%v) = %q, want %q", test.args, screen, test.want)
-		}
+func TestParseInitialScreenRejectsUnknownFlags(t *testing.T) {
+	if _, err := parseInitialScreen([]string{"-a"}); err == nil {
+		t.Fatal("expected error for a removed flag")
 	}
 }
 
-func TestParseInitialScreenRejectsMultipleFlags(t *testing.T) {
-	if _, err := parseInitialScreen([]string{"-a", "-b"}); err == nil {
-		t.Fatal("expected error")
+func TestParseInitialScreenRejectsArguments(t *testing.T) {
+	if _, err := parseInitialScreen([]string{"extra"}); err == nil {
+		t.Fatal("expected error for unexpected arguments")
 	}
 }
 

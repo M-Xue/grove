@@ -3,10 +3,9 @@ package app
 import "github.com/M-Xue/grove/worktree"
 
 type App struct {
-	services        Services
-	state           State
-	loadingCounter  int
-	branchCommitSeq int
+	services       Services
+	state          State
+	loadingCounter int
 	// saveWorktrees persists the latest worktree list for stale-while-revalidate
 	// startup. It is best-effort and injected by main; nil disables caching.
 	saveWorktrees func([]worktree.Info)
@@ -55,12 +54,7 @@ func New(services Services, options ...Option) *App {
 }
 
 func (a *App) Init() Command {
-	switch a.state.Screen {
-	case ScreenAdd:
-		return nil
-	default:
-		return a.loadWorktrees()
-	}
+	return a.loadWorktrees()
 }
 
 func (a *App) State() State {
