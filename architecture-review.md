@@ -2,7 +2,10 @@
 
 > Full-codebase review, 2026-09-27. Revised the same day after the scope
 > reduction that removed the branch screen (and the `branch` package) and
-> merged the add screen into the change screen as a dialog. Findings that
+> merged the add screen into the change screen as a dialog. The `branch`
+> package has since been re-added in minimal form — `RecentCommits` only,
+> feeding the details panel; none of the deleted findings apply to it.
+> Findings that
 > lived entirely in deleted code (the branch-scope data race, the `-a` empty
 > screen bug, the bulk-delete `-D` mismatch, the stateful branch service) are
 > resolved by deletion and no longer listed. Everything below was re-verified
@@ -52,8 +55,9 @@ reconciliation after every event — `ui/model.go`).
   in the render path.
 - It rebuilds the change screen's item slice on every call.
 - The screen must keep `Sync` idempotent and hand-preserve ephemeral state.
-- Exactly one `OnMessage` reaction exists (`BranchAbsentMessage` → the
-  create-branch confirm dialog); the machinery is generic, the usage singular.
+- Two `OnMessage` reactions exist (`BranchAbsentMessage` → the create-branch
+  confirm dialog; `WorktreesLoadedMessage` → refetch the hovered branch's
+  commits); the machinery is generic, the usage narrow.
 
 **Direction:** commit to one model. Either push (the screen reacts to specific
 messages; no blanket Sync) or pull (drop `OnMessage`; derive dialog-opening

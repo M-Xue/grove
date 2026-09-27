@@ -5,11 +5,14 @@ import (
 	"strings"
 
 	"github.com/M-Xue/grove/app"
+	"github.com/M-Xue/grove/branch"
 	"github.com/M-Xue/grove/ui/components/panel"
 	"github.com/M-Xue/grove/ui/components/selectlist"
 	"github.com/M-Xue/grove/ui/components/textinput"
 	"github.com/M-Xue/grove/ui/keys"
+	"github.com/M-Xue/grove/ui/theme"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // changeApp is the narrow view of app the change screen depends on.
@@ -20,6 +23,7 @@ type changeApp interface {
 	RemoveWorktree(path string) app.Command
 	ForceRemoveWorktree(path string) app.Command
 	PruneWorktrees() app.Command
+	LoadBranchCommits(branch string) app.Command
 	Quit() app.Command
 }
 
@@ -31,16 +35,20 @@ type ChangeScreen struct {
 	list      selectlist.Model
 	registry  Registry
 	worktrees []appWorktree
+	// commitsBranch is the branch whose recent commits were last requested, so
+	// hover moves that land on the same branch do not refetch.
+	commitsBranch string
 }
 
 // staleColor is the ANSI escape used to dim stale worktrees in the list.
 const staleColor = "\x1b[38;5;244m"
 
 type appWorktree struct {
-	id    string
-	label string
-	color string
-	stale bool
+	id     string
+	label  string
+	color  string
+	branch string
+	stale  bool
 	// dirty reports that the worktree has uncommitted or untracked changes, so
 	// removing it requires git's --force.
 	dirty bool
@@ -74,15 +82,23 @@ func (s *ChangeScreen) Sync(state app.State) {
 		}
 		items = append(items, selectlist.Item{ID: worktree.Path, Label: label, Color: color})
 		dirty := worktree.HasUncommittedChanges || worktree.HasUntrackedFiles
-		s.worktrees = append(s.worktrees, appWorktree{id: worktree.Path, label: label, color: color, stale: worktree.Stale, dirty: dirty})
+		s.worktrees = append(s.worktrees, appWorktree{id: worktree.Path, label: label, color: color, branch: worktree.Branch, stale: worktree.Stale, dirty: dirty})
 	}
 	items = filterItems(items, s.search.Value())
 	s.list.SetItems(items)
 }
 
-// OnMessage reacts to the semantic outcome of the add dialog's branch check:
-// when the branch is absent, it opens the confirm dialog offering to create it.
+// OnMessage reacts to app messages the screen presents on: a fresh worktree
+// list triggers a (re)fetch of the hovered branch's commits, and an absent
+// branch from the add dialog's check opens the confirm dialog offering to
+// create it.
 func (s *ChangeScreen) OnMessage(ctx *ScreenContext, msg app.Message) tea.Cmd {
+	if _, ok := msg.(app.WorktreesLoadedMessage); ok {
+		// Force a refetch even when the hover is unchanged: the reload may
+		// follow an add/remove that moved the branch's tip.
+		s.commitsBranch = ""
+		return ctx.Run(s.fetchHoveredCommits())
+	}
 	absent, ok := msg.(app.BranchAbsentMessage)
 	if !ok {
 		return nil
@@ -121,11 +137,39 @@ func (s *ChangeScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.Stat
 	}
 	if mode == ModeDefault {
 		if consumed, cmd := s.search.Update(msg); consumed {
+			// Filtering can move the hover to a different worktree, so refresh
+			// the details panel's commits alongside the list.
 			s.list.SetItems(filterItems(toItems(s.worktrees), s.search.Value()))
-			return cmd
+			return tea.Batch(cmd, ctx.Run(s.fetchHoveredCommits()))
 		}
 	}
 	return nil
+}
+
+// fetchHoveredCommits returns the command that loads recent commits for the
+// hovered worktree's branch, or nil when the hover is unchanged (or empty) so
+// selection moves within the same branch do not refetch.
+func (s *ChangeScreen) fetchHoveredCommits() app.Command {
+	worktree, ok := s.hoveredWorktree()
+	if !ok || worktree.branch == "" || worktree.branch == s.commitsBranch {
+		return nil
+	}
+	s.commitsBranch = worktree.branch
+	return s.app.LoadBranchCommits(worktree.branch)
+}
+
+// hoveredWorktree resolves the list's current selection to its worktree.
+func (s *ChangeScreen) hoveredWorktree() (appWorktree, bool) {
+	item, ok := s.list.SelectedItem()
+	if !ok {
+		return appWorktree{}, false
+	}
+	for _, worktree := range s.worktrees {
+		if worktree.id == item.ID {
+			return worktree, true
+		}
+	}
+	return appWorktree{}, false
 }
 
 // panelGap is the number of blank columns between side-by-side panels.
@@ -144,15 +188,15 @@ func (s *ChangeScreen) View(width, height int, state app.State) string {
 	// Interior rows: a blank line under the title, the labelled search field,
 	// and a blank line above the list, all inside the borders.
 	listHeight := max(1, panelHeight-5)
-	searchLabel := "Search "
-	s.search.SetWidth(max(0, min(searchFieldWidth, leftWidth-4-len(searchLabel))))
+	searchLabel := detailLabel("Search") + " "
+	s.search.SetWidth(max(0, min(searchFieldWidth, leftWidth-4-lipgloss.Width(searchLabel))))
 	searchRow := searchLabel + s.search.View()
 	interior := strings.Join(append([]string{"", searchRow, ""}, strings.Split(s.list.View(listHeight), "\n")...), "\n")
 	// The worktrees panel is the active section whenever no dialog owns the
 	// keyboard; dialogs render their own active border.
 	worktreesActive := !s.confirm.active && !s.addDlg.active
 	left := strings.Split(panel.Render("Worktrees", interior, leftWidth, panelHeight, worktreesActive), "\n")
-	right := strings.Split(panel.Render("Branch details", "", rightWidth, panelHeight, false), "\n")
+	right := strings.Split(panel.Render("Branch Details", s.detailsView(rightWidth-4, state.BranchCommits), rightWidth, panelHeight, false), "\n")
 	rows := make([]string, 0, panelHeight)
 	for i := 0; i < panelHeight; i++ {
 		leftRow, rightRow := "", ""
@@ -172,6 +216,109 @@ func (s *ChangeScreen) View(width, height int, state app.State) string {
 		return overlayDialog(content, s.addDlg.view(width, height), width, height)
 	}
 	return content
+}
+
+// Detail styling: labels and section titles render bold in the panel accent
+// color; values keep the default foreground. The author initials take the same
+// tint the list uses for its selection highlight. The styles are built per call
+// (not package vars) so they bind to the default renderer main installs at
+// startup rather than the one active at package init.
+func detailLabel(text string) string {
+	return lipgloss.NewStyle().Foreground(theme.BorderActive).Bold(true).Render(text)
+}
+
+func commitAuthor(text string) string {
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("183")).Render(text)
+}
+
+// detailsView renders the Branch details panel content for the worktree
+// currently hovered in the list, mirroring the left panel's blank line under
+// the title: the branch and path, then the branch's recent commits. Empty when
+// the list has no selection (e.g. no search matches). width is the panel
+// interior available to content; values wrap within it.
+func (s *ChangeScreen) detailsView(width int, commits map[string][]branch.CommitInfo) string {
+	worktree, ok := s.hoveredWorktree()
+	if !ok {
+		return ""
+	}
+	lines := []string{""}
+	lines = append(lines, detailRow("Branch:", worktree.branch, width)...)
+	lines = append(lines, detailRow("Path:", worktree.id, width)...)
+	lines = append(lines, "", detailLabel("Commits"))
+	lines = append(lines, commitRows(commits[worktree.branch])...)
+	return strings.Join(lines, "\n")
+}
+
+// detailRowLabelWidth is the column detail labels are padded to, so the values
+// start aligned.
+const detailRowLabelWidth = 7
+
+// detailRow renders a labelled value in the details panel's label column.
+func detailRow(label, value string, width int) []string {
+	return labeledRows(label, value, detailRowLabelWidth, width)
+}
+
+// labeledRows renders a styled label padded to labelWidth followed by a value,
+// wrapping the value across as many lines as needed within width; continuation
+// lines are indented to the value column so the wrapped text stays aligned with
+// the first line.
+func labeledRows(label, value string, labelWidth, width int) []string {
+	styled := detailLabel(label)
+	valueWidth := width - labelWidth - 1
+	if valueWidth < 1 {
+		// Too narrow to wrap sensibly; emit one line and let it clip.
+		return []string{fitLine(styled, labelWidth) + " " + value}
+	}
+	indent := strings.Repeat(" ", labelWidth)
+	runes := []rune(value)
+	lines := make([]string, 0, 1)
+	prefix := fitLine(styled, labelWidth)
+	for {
+		chunk := runes
+		if len(chunk) > valueWidth {
+			chunk = chunk[:valueWidth]
+		}
+		lines = append(lines, prefix+" "+string(chunk))
+		runes = runes[len(chunk):]
+		if len(runes) == 0 {
+			return lines
+		}
+		prefix = indent
+	}
+}
+
+// commitRows renders one line per commit — aligned short hash, the author's
+// initials in the accent tint, then the subject. Long subjects clip at the
+// panel border rather than wrapping, keeping one row per commit.
+func commitRows(commits []branch.CommitInfo) []string {
+	hashWidth := 0
+	for _, commit := range commits {
+		hashWidth = max(hashWidth, len(commit.Hash))
+	}
+	rows := make([]string, 0, len(commits))
+	for _, commit := range commits {
+		author := commitAuthor(fitLine(authorInitials(commit.Author), 2))
+		rows = append(rows, fitLine(commit.Hash, hashWidth)+" "+author+" "+commit.Subject)
+	}
+	return rows
+}
+
+// authorInitials abbreviates an author name to two characters: the first rune
+// of the first and last words, or the first two runes of a single-word name.
+func authorInitials(name string) string {
+	fields := strings.Fields(name)
+	switch len(fields) {
+	case 0:
+		return ""
+	case 1:
+		runes := []rune(fields[0])
+		if len(runes) > 2 {
+			runes = runes[:2]
+		}
+		return string(runes)
+	default:
+		return string([]rune(fields[0])[:1]) + string([]rune(fields[len(fields)-1])[:1])
+	}
 }
 
 func (s *ChangeScreen) Footer(helpWidth int) string {
@@ -296,7 +443,7 @@ func (s *ChangeScreen) hasStale() bool {
 
 func (s *ChangeScreen) actionMoveSelection(actx *ActionCtx) app.Command {
 	s.list.Update(actx.Key)
-	return nil
+	return s.fetchHoveredCommits()
 }
 
 func (s *ChangeScreen) actionQuit(actx *ActionCtx) app.Command {
@@ -320,6 +467,7 @@ func (s *ChangeScreen) actionDialogMove(actx *ActionCtx) app.Command {
 func (s *ChangeScreen) Reset() {
 	s.search.Clear()
 	s.search.Focus()
+	s.commitsBranch = ""
 	s.confirm.close()
 	s.addDlg.close()
 	s.list.SetItems(toItems(s.worktrees))

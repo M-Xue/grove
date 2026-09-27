@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/M-Xue/grove/branch"
 	"github.com/M-Xue/grove/worktree"
 )
 
@@ -65,6 +66,15 @@ type WorktreeProgressMessage struct {
 type WorktreeAddedMessage struct {
 	LoadingID string
 	Err       error
+}
+
+// BranchCommitsLoadedMessage carries the recent commits fetched for one
+// branch's details panel. It has no LoadingID because the fetch is a silent,
+// hover-driven background lookup with no loading entry.
+type BranchCommitsLoadedMessage struct {
+	Branch  string
+	Commits []branch.CommitInfo
+	Err     error
 }
 
 type WorktreeRemovedMessage struct {

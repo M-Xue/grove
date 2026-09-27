@@ -1,6 +1,7 @@
 package textinput
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -113,4 +114,59 @@ func TestSetWidthPadsFieldToWidth(t *testing.T) {
 	if got := lipgloss.Width(m.View()); got != 40 {
 		t.Fatalf("expected a 40-cell field with a value, got %d", got)
 	}
+}
+
+func TestViewScrollsWithCursorBeyondWidth(t *testing.T) {
+	forceColorProfile(t)
+	m := New("")
+	m.Focus()
+	m.SetWidth(5)
+	m.SetValue("abcdefgh")
+
+	// Cursor is at the end: the window shows the tail with the caret cell.
+	view := stripAnsi(m.View())
+	if view != "efgh " {
+		t.Fatalf("expected tail window %q, got %q", "efgh ", view)
+	}
+
+	// Walking left keeps the window until the cursor hits its left edge, then
+	// scrolls back to reveal earlier text.
+	for i := 0; i < 6; i++ {
+		m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	}
+	view = stripAnsi(m.View())
+	if !strings.HasPrefix(view, "cdefg") {
+		t.Fatalf("expected window scrolled back to %q..., got %q", "cdefg", view)
+	}
+
+	// Home reveals the head of the value again.
+	m.Update(tea.KeyMsg{Type: tea.KeyHome})
+	view = stripAnsi(m.View())
+	if !strings.HasPrefix(view, "abcde") {
+		t.Fatalf("expected head window %q..., got %q", "abcde", view)
+	}
+}
+
+func TestViewClipsBlurredAndDisabledValues(t *testing.T) {
+	forceColorProfile(t)
+	m := New("")
+	m.Focus()
+	m.SetWidth(5)
+	m.SetValue("abcdefgh")
+
+	m.Blur()
+	if view := stripAnsi(m.View()); view != "abcde" {
+		t.Fatalf("expected blurred field clipped to %q, got %q", "abcde", view)
+	}
+
+	m.SetDisabled(true)
+	if view := stripAnsi(m.View()); view != "abcde" {
+		t.Fatalf("expected disabled field clipped to %q, got %q", "abcde", view)
+	}
+}
+
+var ansiSequence = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func stripAnsi(s string) string {
+	return ansiSequence.ReplaceAllString(s, "")
 }

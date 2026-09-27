@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"os"
 	"strings"
 
 	"github.com/M-Xue/grove/ui/components/dialog"
@@ -8,22 +9,28 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// addDialogInteriorWidth is the width the dialog's input rows are padded to,
-// so the panel keeps a stable size while the user types.
-const addDialogInteriorWidth = 40
+// addDialogInteriorWidth is the width the dialog's rows are padded to, so the
+// panel keeps a stable size while the user types. With the frame's border and
+// padding columns (4 in total) the dialog box renders 80 cells wide.
+const addDialogInteriorWidth = 76
 
 // addDialogLabelWidth is the column the field labels are padded to, so the
-// input fields start aligned.
-const addDialogLabelWidth = 6
+// input fields start aligned. Sized to the widest label, "Relative path".
+const addDialogLabelWidth = 13
 
 // addDialog is the change screen's worktree-creation dialog: two text inputs
-// (path and branch) rendered in the shared dialog frame. The screen owns when
-// it opens and what happens on submit; the dialog owns only input state.
+// (path and branch) rendered in the shared dialog frame under a header showing
+// the directory the path input is relative to. The screen owns when it opens
+// and what happens on submit; the dialog owns only input state.
 type addDialog struct {
 	path        textinput.Model
 	branch      textinput.Model
 	focusedPath bool
 	active      bool
+	// currentPath is the working directory grove was launched from, shown so
+	// the user knows what the relative path input resolves against. Empty when
+	// it cannot be determined.
+	currentPath string
 }
 
 func newAddDialog() addDialog {
@@ -31,6 +38,7 @@ func newAddDialog() addDialog {
 		path:   textinput.New(""),
 		branch: textinput.New(""),
 	}
+	d.currentPath, _ = os.Getwd()
 	fieldWidth := addDialogInteriorWidth - addDialogLabelWidth - 1
 	d.path.SetWidth(fieldWidth)
 	d.branch.SetWidth(fieldWidth)
@@ -78,16 +86,19 @@ func (d *addDialog) values() (string, string) {
 }
 
 func (d *addDialog) view(width, height int) string {
-	lines := []string{
-		labeledField("Path", d.path.View()),
+	lines := labeledRows("Current path", d.currentPath, addDialogLabelWidth, addDialogInteriorWidth)
+	lines = append(lines,
+		"",
+		labeledField("Relative path", d.path.View()),
 		"",
 		labeledField("Branch", d.branch.View()),
-	}
+	)
 	return dialog.Frame("Add worktree", strings.Join(lines, "\n"), width)
 }
 
 // labeledField renders a label column followed by an input field, labels
-// padded to a common width so the fields start aligned.
+// styled like the detail panel's titles and padded to a common width so the
+// fields start aligned.
 func labeledField(label, field string) string {
-	return fitLine(label, addDialogLabelWidth) + " " + field
+	return fitLine(detailLabel(label), addDialogLabelWidth) + " " + field
 }

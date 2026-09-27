@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/M-Xue/grove/branch"
 	"github.com/M-Xue/grove/worktree"
 )
 
@@ -12,6 +13,7 @@ const (
 
 type Services struct {
 	Worktree worktree.Service
+	Branch   branch.Service
 }
 
 type LoadingEntry struct {
@@ -37,6 +39,10 @@ type State struct {
 	Screen        ScreenID
 	SubmittedPath string
 	Worktrees     []worktree.Info
+	// BranchCommits caches the recent commits fetched per branch, keyed by
+	// short branch name. Entries are filled lazily as the change screen hovers
+	// worktrees and overwritten wholesale when a fetch for that branch lands.
+	BranchCommits map[string][]branch.CommitInfo
 	Loading       []LoadingEntry
 	Statuses      []StatusEntry
 
