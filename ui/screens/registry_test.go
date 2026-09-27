@@ -39,8 +39,14 @@ func TestActiveModeSwitchesWithDialog(t *testing.T) {
 	if s.activeMode() != ModeDefault {
 		t.Fatal("expected ModeDefault initially")
 	}
+	s.addDlg.active = true
+	if s.activeMode() != ModeAdd {
+		t.Fatal("expected ModeAdd when the add dialog is active")
+	}
+	// The confirm dialog takes precedence: it opens over the add flow (e.g.
+	// the create-branch prompt) and must own the keymap while visible.
 	s.confirm.active = true
 	if s.activeMode() != ModeDialog {
-		t.Fatal("expected ModeDialog when the dialog is active")
+		t.Fatal("expected ModeDialog when the confirm dialog is active")
 	}
 }

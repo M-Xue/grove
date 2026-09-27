@@ -1,7 +1,6 @@
 package app
 
 import (
-	"github.com/M-Xue/grove/branch"
 	"github.com/M-Xue/grove/worktree"
 )
 
@@ -23,43 +22,6 @@ type QuitRequested struct{}
 type WorktreesLoadedMessage struct {
 	LoadingID string
 	Worktrees []worktree.Info
-	Err       error
-}
-
-type BranchesLoadedMessage struct {
-	LoadingID string
-	Branches  []branch.Info
-	Scope     branch.Scope
-	Err       error
-}
-
-type BranchCommitsLoadedMessage struct {
-	LoadingID string
-	Seq       int
-	Name      string
-	Commits   []branch.CommitInfo
-	Err       error
-}
-
-type BranchCheckedOutMessage struct {
-	LoadingID string
-	Err       error
-}
-
-type BranchDeletedMessage struct {
-	LoadingID string
-	Err       error
-}
-
-type AllBranchesDeletedMessage struct {
-	LoadingID string
-	Deleted   []string
-	Skipped   []string
-	Err       error
-}
-
-type BranchesFetchedMessage struct {
-	LoadingID string
 	Err       error
 }
 

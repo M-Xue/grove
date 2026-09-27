@@ -5,7 +5,21 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
+
+// forceColorProfile makes lipgloss emit colors even though tests run without a
+// tty, so view assertions can see the caret and field background.
+func forceColorProfile(t *testing.T) {
+	t.Helper()
+	previous := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	t.Cleanup(func() { lipgloss.SetColorProfile(previous) })
+}
+
+// caretMarker is the reverse-video attribute the caret renders with.
+const caretMarker = "\x1b[7;"
 
 func TestUpdateAddsASCIIInput(t *testing.T) {
 	m := New("placeholder")
@@ -50,15 +64,16 @@ func TestDisabledUpdateIgnoresInput(t *testing.T) {
 }
 
 func TestDisabledViewIsInert(t *testing.T) {
+	forceColorProfile(t)
 	m := New("placeholder")
 	m.Focus()
 	m.SetValue("branch-name")
 	m.SetDisabled(true)
 	view := m.View()
-	if strings.Contains(view, focusColor) || strings.Contains(view, "> ") {
+	if strings.Contains(view, "> ") {
 		t.Fatalf("expected no focus prefix in disabled view, got %q", view)
 	}
-	if strings.Contains(view, cursorColor) {
+	if strings.Contains(view, caretMarker) {
 		t.Fatalf("expected no caret in disabled view, got %q", view)
 	}
 	if !strings.Contains(view, "branch-name") {
@@ -67,12 +82,35 @@ func TestDisabledViewIsInert(t *testing.T) {
 }
 
 func TestClearingDisabledRestoresCaret(t *testing.T) {
+	forceColorProfile(t)
 	m := New("placeholder")
 	m.Focus()
 	m.SetValue("branch-name")
 	m.SetDisabled(true)
 	m.SetDisabled(false)
-	if !strings.Contains(m.View(), cursorColor) {
+	if !strings.Contains(m.View(), caretMarker) {
 		t.Fatalf("expected caret to return once re-enabled, got %q", m.View())
+	}
+}
+
+func TestViewRendersFieldBackground(t *testing.T) {
+	forceColorProfile(t)
+	m := New("placeholder")
+	// 48;5;… is the SGR background attribute; the exact code depends on how
+	// the profile downsamples fieldBg, so only the attribute is asserted.
+	if !strings.Contains(m.View(), "48;5;") {
+		t.Fatalf("expected the field background in the view, got %q", m.View())
+	}
+}
+
+func TestSetWidthPadsFieldToWidth(t *testing.T) {
+	m := New("placeholder")
+	m.SetWidth(40)
+	if got := lipgloss.Width(m.View()); got != 40 {
+		t.Fatalf("expected a 40-cell field, got %d", got)
+	}
+	m.SetValue("hi")
+	if got := lipgloss.Width(m.View()); got != 40 {
+		t.Fatalf("expected a 40-cell field with a value, got %d", got)
 	}
 }
