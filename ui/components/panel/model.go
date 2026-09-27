@@ -15,7 +15,13 @@ import (
 // Tab renders a standalone title tab (e.g. the app name) in the same style as
 // a panel's embedded title.
 func Tab(label string) string {
-	return lipgloss.NewStyle().Foreground(theme.TitleFg).Background(theme.TitleBg).Bold(true).Render(" " + label + " ")
+	return tabWithBackground(label, theme.TitleBg)
+}
+
+// tabWithBackground renders a title tab on the given background, so a panel's
+// tab always matches its border color.
+func tabWithBackground(label string, background lipgloss.Color) string {
+	return lipgloss.NewStyle().Foreground(theme.TitleFg).Background(background).Bold(true).Render(" " + label + " ")
 }
 
 // Render draws content inside a square-cornered box of exactly width×height
@@ -34,7 +40,7 @@ func Render(title, content string, width, height int, active bool) string {
 	border := lipgloss.NewStyle().Foreground(borderColor)
 
 	inner := width - 2 // columns between the vertical borders
-	tab := Tab(title)
+	tab := tabWithBackground(title, borderColor)
 	if lipgloss.Width(tab) > inner-1 {
 		tab = lipgloss.NewStyle().MaxWidth(inner - 1).Render(tab)
 	}

@@ -15,7 +15,7 @@ var (
 	valueColor = lipgloss.Color("252")
 	// The placeholder shares the inactive-border color so hint text and idle
 	// chrome read as one muted layer.
-	placeholderColor = theme.BorderInactive
+	placeholderColor = theme.TextInactive
 )
 
 type Model struct {
