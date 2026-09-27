@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
@@ -298,5 +299,63 @@ func TestChangeScreenPRSectionPositionIsStableWhileCommitsLoad(t *testing.T) {
 	before, after := prLine(pending), prLine(loaded)
 	if before == -1 || before != after {
 		t.Fatalf("expected the PR heading to stay on the same row, got %d then %d", before, after)
+	}
+}
+
+func TestChangeScreenCommitsWindowScrollsByPage(t *testing.T) {
+	commits := make([]branch.CommitInfo, 0, 12)
+	for i := 1; i <= 12; i++ {
+		h := fmt.Sprintf("c%02d", i)
+		commits = append(commits, branch.CommitInfo{Hash: h, Author: "Max", Subject: "subject " + h})
+	}
+	s := NewChangeScreen(fakeApp{})
+	state := app.State{
+		Worktrees:     []worktree.Info{{Path: "/repo", Branch: "feature"}},
+		BranchCommits: map[string][]branch.CommitInfo{"feature": commits},
+	}
+	s.Sync(state)
+	ctx := &ScreenContext{Run: func(app.Command) tea.Cmd { return nil }}
+
+	view := stripAnsiSequences(s.View(140, 40, state))
+	if !strings.Contains(view, "1-5/12") || !strings.Contains(view, "subject c05") || strings.Contains(view, "subject c06") {
+		t.Fatalf("expected the first window of commits, got:\n%s", view)
+	}
+
+	// One press moves a full window: 6..10.
+	s.Update(ctx, tea.KeyMsg{Type: tea.KeyShiftDown}, state)
+	view = stripAnsiSequences(s.View(140, 40, state))
+	if !strings.Contains(view, "6-10/12") || strings.Contains(view, "subject c05") || !strings.Contains(view, "subject c10") {
+		t.Fatalf("expected the window scrolled to 6-10, got:\n%s", view)
+	}
+
+	// The next press clamps to the last full window.
+	s.Update(ctx, tea.KeyMsg{Type: tea.KeyShiftDown}, state)
+	view = stripAnsiSequences(s.View(140, 40, state))
+	if !strings.Contains(view, "8-12/12") || !strings.Contains(view, "subject c12") {
+		t.Fatalf("expected the window clamped to the tail, got:\n%s", view)
+	}
+
+	// Scrolling back up clamps at the top.
+	for i := 0; i < 5; i++ {
+		s.Update(ctx, tea.KeyMsg{Type: tea.KeyShiftUp}, state)
+	}
+	view = stripAnsiSequences(s.View(140, 40, state))
+	if !strings.Contains(view, "1-5/12") || !strings.Contains(view, "subject c01") {
+		t.Fatalf("expected the window clamped to the head, got:\n%s", view)
+	}
+}
+
+func TestChangeScreenCommitScrollResetsOnHoverChange(t *testing.T) {
+	s := NewChangeScreen(fakeApp{})
+	state := app.State{Worktrees: []worktree.Info{
+		{Path: "/repo", Branch: "main"},
+		{Path: "/repo-feature", Branch: "feature"},
+	}}
+	s.Sync(state)
+	s.commitScroll = 3
+
+	s.actionMoveSelection(&ActionCtx{Key: keyMsg(tea.KeyDown)})
+	if s.commitScroll != 0 {
+		t.Fatalf("expected the scroll to reset on hover change, got %d", s.commitScroll)
 	}
 }

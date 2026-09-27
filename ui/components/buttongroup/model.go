@@ -7,13 +7,16 @@ package buttongroup
 import (
 	"strings"
 
+	"github.com/M-Xue/grove/ui/theme"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 var (
 	selectedColor = lipgloss.Color("183")
-	mutedColor    = lipgloss.Color("245")
+	// Unfocused buttons dim to the shared inactive tone so they read as idle
+	// alongside the rest of the muted chrome.
+	mutedColor = theme.TextInactive
 )
 
 type Button struct {

@@ -11,8 +11,12 @@ var (
 	BorderActive = lipgloss.Color("111")
 	// BorderInactive is the muted slate blue for every other section border.
 	BorderInactive = lipgloss.Color("60")
-	// TitleFg/TitleBg render section titles as a light periwinkle tab with
-	// dark text.
+	// TextInactive dims de-emphasized interactive text (unfocused buttons,
+	// placeholder hints). It shares the inactive-border color so idle text and
+	// idle chrome read as one muted layer.
+	TextInactive = BorderInactive
+	// TitleFg/TitleBg render section titles as a tab matching the active
+	// border color, with dark text.
 	TitleFg = lipgloss.Color("235")
-	TitleBg = lipgloss.Color("146")
+	TitleBg = lipgloss.Color("111")
 )

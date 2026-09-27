@@ -43,7 +43,14 @@ type ChangeScreen struct {
 	// heading while its fetch is in flight; the model ticks it on the shared
 	// spinner timer.
 	spinnerFrame int
+	// commitScroll is the index of the first visible commit in the details
+	// panel's fixed-height commits window; shift+up/down move it.
+	commitScroll int
 }
+
+// commitWindowSize is how many commit rows the details panel shows at once;
+// the fetched list (app.RecentCommitLimit deep) scrolls within it.
+const commitWindowSize = 5
 
 // staleColor is the ANSI escape used to dim stale worktrees in the list.
 const staleColor = "\x1b[38;5;244m"
@@ -160,6 +167,7 @@ func (s *ChangeScreen) fetchHoveredCommits() app.Command {
 		return nil
 	}
 	s.commitsBranch = worktree.branch
+	s.commitScroll = 0
 	return s.app.LoadBranchCommits(worktree.branch)
 }
 
@@ -234,11 +242,8 @@ func (s *ChangeScreen) View(width, height int, state app.State) string {
 	s.search.SetWidth(max(0, min(searchFieldWidth, leftWidth-4-lipgloss.Width(searchLabel))))
 	searchRow := searchLabel + s.search.View()
 	interior := strings.Join(append([]string{"", searchRow, ""}, strings.Split(s.list.View(listHeight), "\n")...), "\n")
-	// The worktrees panel is the active section whenever no dialog owns the
-	// keyboard; dialogs render their own active border.
-	worktreesActive := !s.confirm.active && !s.addDlg.active
-	left := strings.Split(panel.Render("Worktrees", interior, leftWidth, panelHeight, worktreesActive), "\n")
-	right := strings.Split(panel.Render("Branch Details", s.detailsView(rightWidth-4, state), rightWidth, panelHeight, false), "\n")
+	left := strings.Split(panel.Render("Worktrees", interior, leftWidth, panelHeight, true), "\n")
+	right := strings.Split(panel.Render("Branch Details", s.detailsView(rightWidth-4, state), rightWidth, panelHeight, true), "\n")
 	rows := make([]string, 0, panelHeight)
 	for i := 0; i < panelHeight; i++ {
 		leftRow, rightRow := "", ""
@@ -273,6 +278,11 @@ func commitAuthor(text string) string {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color("183")).Render(text)
 }
 
+// mutedText renders auxiliary text (counts, hints) in the muted accent.
+func mutedText(text string) string {
+	return lipgloss.NewStyle().Foreground(mutedColor).Render(text)
+}
+
 // detailsView renders the Branch Details panel content for the worktree
 // currently hovered in the list, mirroring the left panel's blank line under
 // the title: the branch and path, the branch's pull request (when one is
@@ -290,16 +300,23 @@ func (s *ChangeScreen) detailsView(width int, state app.State) string {
 	// Both section headings are always present so the panel's shape is stable;
 	// a heading whose fetch is still in flight carries a spinner instead of
 	// appearing only once its data lands.
+	commits := state.BranchCommits[worktree.branch]
+	maxScroll := max(0, len(commits)-commitWindowSize)
+	s.commitScroll = max(0, min(s.commitScroll, maxScroll))
 	commitsHeading := detailLabel("Commits")
 	if worktree.branch != "" && commitsPending(state, worktree.branch) {
 		commitsHeading += " " + s.spinner()
+	} else if len(commits) > commitWindowSize {
+		// More commits than the window: show which slice is visible.
+		commitsHeading += " " + mutedText(fmt.Sprintf("%d-%d/%d", s.commitScroll+1, s.commitScroll+commitWindowSize, len(commits)))
 	}
 	lines = append(lines, "", commitsHeading)
-	// The commits section always occupies its full row budget — blank rows
-	// stand in while loading (or when the branch has fewer commits) — so the
-	// PR section beneath it never shifts as data lands.
-	rows := commitRows(state.BranchCommits[worktree.branch])
-	for len(rows) < app.RecentCommitLimit {
+	// The commits section always occupies its full window — blank rows stand
+	// in while loading (or when the branch has fewer commits) — so the PR
+	// section beneath it never shifts as data lands or the window scrolls.
+	window := commits[s.commitScroll:min(len(commits), s.commitScroll+commitWindowSize)]
+	rows := commitRows(window)
+	for len(rows) < commitWindowSize {
 		rows = append(rows, "")
 	}
 	lines = append(lines, rows...)
@@ -418,6 +435,7 @@ func (s *ChangeScreen) buildRegistry() Registry {
 			Binding{Keys: []keys.Key{keys.KeyCtrlP}, Symbol: "ctrl+p", Label: "prune", Action: s.actionStartPrune},
 			Binding{Keys: []keys.Key{keys.KeyUp, keys.KeyShiftTab}, Symbol: "↑/shift+tab", Label: "move", Action: s.actionMoveSelection},
 			Binding{Keys: []keys.Key{keys.KeyDown, keys.KeyTab}, Symbol: "↓/tab", Label: "move", Action: s.actionMoveSelection},
+			Binding{Keys: []keys.Key{keys.KeyShiftUp, keys.KeyShiftDown}, Symbol: "shift+↑↓", Label: "commits", Action: s.actionScrollCommits},
 			Binding{Keys: []keys.Key{keys.KeyEsc, keys.KeyCtrlC}, Symbol: "esc", Label: "quit", Action: s.actionQuit},
 		),
 		ModeDialog: NewMode(
@@ -530,6 +548,19 @@ func (s *ChangeScreen) actionMoveSelection(actx *ActionCtx) app.Command {
 	return s.fetchHoveredCommits()
 }
 
+// actionScrollCommits moves the details panel's commits window one page (the
+// window height) at a time. Only the lower bound is clamped here; the upper
+// bound depends on how many commits are loaded, which detailsView clamps
+// against at render time.
+func (s *ChangeScreen) actionScrollCommits(actx *ActionCtx) app.Command {
+	if keys.Normalize(actx.Key) == keys.KeyShiftUp {
+		s.commitScroll = max(0, s.commitScroll-commitWindowSize)
+		return nil
+	}
+	s.commitScroll += commitWindowSize
+	return nil
+}
+
 func (s *ChangeScreen) actionQuit(actx *ActionCtx) app.Command {
 	return s.app.Quit()
 }
@@ -552,6 +583,7 @@ func (s *ChangeScreen) Reset() {
 	s.search.Clear()
 	s.search.Focus()
 	s.commitsBranch = ""
+	s.commitScroll = 0
 	s.confirm.close()
 	s.addDlg.close()
 	s.list.SetItems(toItems(s.worktrees))

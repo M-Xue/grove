@@ -1,9 +1,8 @@
 package app
 
-// RecentCommitLimit is how many commits the details panel shows per branch.
-// Exported so the panel can reserve exactly this many rows and keep the
-// sections beneath it from shifting as commits load.
-const RecentCommitLimit = 5
+// RecentCommitLimit is how many commits are fetched per branch for the
+// details panel; the panel shows a smaller scrollable window of them.
+const RecentCommitLimit = 20
 
 // LoadBranchCommits fetches the recent commits of the named branch for the
 // details panel. It is hover-driven and fires on every selection change, so it
