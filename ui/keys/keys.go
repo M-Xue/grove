@@ -5,25 +5,27 @@ import tea "github.com/charmbracelet/bubbletea"
 type Key string
 
 const (
-	KeyUnknown   Key = ""
-	KeyEnter     Key = "enter"
-	KeyEsc       Key = "esc"
-	KeyCtrlC     Key = "ctrl+c"
-	KeyCtrlA     Key = "ctrl+a"
-	KeyCtrlD     Key = "ctrl+d"
-	KeyCtrlP     Key = "ctrl+p"
-	KeyUp        Key = "up"
-	KeyDown      Key = "down"
-	KeyLeft      Key = "left"
-	KeyRight     Key = "right"
-	KeyTab       Key = "tab"
-	KeyShiftTab  Key = "shift+tab"
-	KeyShiftUp   Key = "shift+up"
-	KeyShiftDown Key = "shift+down"
-	KeyBackspace Key = "backspace"
-	KeyJ         Key = "j"
-	KeyK         Key = "k"
-	KeyQ         Key = "q"
+	KeyUnknown    Key = ""
+	KeyEnter      Key = "enter"
+	KeyEsc        Key = "esc"
+	KeyCtrlC      Key = "ctrl+c"
+	KeyCtrlA      Key = "ctrl+a"
+	KeyCtrlD      Key = "ctrl+d"
+	KeyCtrlP      Key = "ctrl+p"
+	KeyUp         Key = "up"
+	KeyDown       Key = "down"
+	KeyLeft       Key = "left"
+	KeyRight      Key = "right"
+	KeyTab        Key = "tab"
+	KeyShiftTab   Key = "shift+tab"
+	KeyShiftUp    Key = "shift+up"
+	KeyShiftDown  Key = "shift+down"
+	KeyShiftLeft  Key = "shift+left"
+	KeyShiftRight Key = "shift+right"
+	KeyBackspace  Key = "backspace"
+	KeyJ          Key = "j"
+	KeyK          Key = "k"
+	KeyQ          Key = "q"
 )
 
 func Normalize(msg tea.KeyMsg) Key {
@@ -56,6 +58,10 @@ func Normalize(msg tea.KeyMsg) Key {
 		return KeyShiftUp
 	case "shift+down":
 		return KeyShiftDown
+	case "shift+left":
+		return KeyShiftLeft
+	case "shift+right":
+		return KeyShiftRight
 	case "backspace":
 		return KeyBackspace
 	case "j":

@@ -6,7 +6,9 @@ import (
 
 	"github.com/M-Xue/grove/app"
 	"github.com/M-Xue/grove/branch"
+	"github.com/M-Xue/grove/pr"
 	"github.com/M-Xue/grove/ui/components/loading"
+	"github.com/M-Xue/grove/ui/components/pager"
 	"github.com/M-Xue/grove/ui/components/panel"
 	"github.com/M-Xue/grove/ui/components/selectlist"
 	"github.com/M-Xue/grove/ui/components/textinput"
@@ -43,9 +45,12 @@ type ChangeScreen struct {
 	// heading while its fetch is in flight; the model ticks it on the shared
 	// spinner timer.
 	spinnerFrame int
-	// commitScroll is the index of the first visible commit in the details
-	// panel's fixed-height commits window; shift+up/down move it.
-	commitScroll int
+	// commitsPager pages the details panel's fixed-height commits window;
+	// shift+up/down move it.
+	commitsPager pager.Model[branch.CommitInfo]
+	// checksPager pages the PR section's CI checks within whatever rows the
+	// details panel has left beneath the PR fields; shift+left/right move it.
+	checksPager pager.Model[pr.Check]
 }
 
 // commitWindowSize is how many commit rows the details panel shows at once;
@@ -167,7 +172,8 @@ func (s *ChangeScreen) fetchHoveredCommits() app.Command {
 		return nil
 	}
 	s.commitsBranch = worktree.branch
-	s.commitScroll = 0
+	s.commitsPager.Reset()
+	s.checksPager.Reset()
 	return s.app.LoadBranchCommits(worktree.branch)
 }
 
@@ -243,7 +249,7 @@ func (s *ChangeScreen) View(width, height int, state app.State) string {
 	searchRow := searchLabel + s.search.View()
 	interior := strings.Join(append([]string{"", searchRow, ""}, strings.Split(s.list.View(listHeight), "\n")...), "\n")
 	left := strings.Split(panel.Render("Worktrees", interior, leftWidth, panelHeight, true), "\n")
-	right := strings.Split(panel.Render("Branch Details", s.detailsView(rightWidth-4, state), rightWidth, panelHeight, true), "\n")
+	right := strings.Split(panel.Render("Branch Details", s.detailsView(rightWidth-4, panelHeight-2, state), rightWidth, panelHeight, true), "\n")
 	rows := make([]string, 0, panelHeight)
 	for i := 0; i < panelHeight; i++ {
 		leftRow, rightRow := "", ""
@@ -288,8 +294,9 @@ func mutedText(text string) string {
 // the title: the branch and path, the branch's pull request (when one is
 // known), then its recent commits. Empty when the list has no selection (e.g.
 // no search matches). width is the panel interior available to content; values
-// wrap within it.
-func (s *ChangeScreen) detailsView(width int, state app.State) string {
+// wrap within it. height is the interior row budget: the PR section's checks
+// list pages within whatever rows remain beneath everything above it.
+func (s *ChangeScreen) detailsView(width, height int, state app.State) string {
 	worktree, ok := s.hoveredWorktree()
 	if !ok {
 		return ""
@@ -301,36 +308,38 @@ func (s *ChangeScreen) detailsView(width int, state app.State) string {
 	// a heading whose fetch is still in flight carries a spinner instead of
 	// appearing only once its data lands.
 	commits := state.BranchCommits[worktree.branch]
-	maxScroll := max(0, len(commits)-commitWindowSize)
-	s.commitScroll = max(0, min(s.commitScroll, maxScroll))
+	s.commitsPager.SetItems(commits)
+	window := s.commitsPager.Page(commitWindowSize)
 	commitsHeading := detailLabel("Commits")
 	if worktree.branch != "" && commitsPending(state, worktree.branch) {
 		commitsHeading += " " + s.spinner()
-	} else if len(commits) > commitWindowSize {
+	} else if status := s.commitsPager.Status(); status != "" {
 		// More commits than the window: show which slice is visible.
-		commitsHeading += " " + mutedText(fmt.Sprintf("%d-%d/%d", s.commitScroll+1, s.commitScroll+commitWindowSize, len(commits)))
+		commitsHeading += " " + mutedText(status)
 	}
 	lines = append(lines, "", commitsHeading)
 	// The commits section always occupies its full window — blank rows stand
-	// in while loading (or when the branch has fewer commits) — so the PR
-	// section beneath it never shifts as data lands or the window scrolls.
-	window := commits[s.commitScroll:min(len(commits), s.commitScroll+commitWindowSize)]
+	// in while loading (or when the branch has fewer commits or a remainder
+	// last page) — so the PR section beneath it never shifts as data lands or
+	// the window pages.
 	rows := commitRows(window)
 	for len(rows) < commitWindowSize {
 		rows = append(rows, "")
 	}
 	lines = append(lines, rows...)
 	lines = append(lines, "")
-	lines = append(lines, s.prSection(worktree.branch, state, width)...)
+	lines = append(lines, s.prSection(worktree.branch, state, width, height-len(lines))...)
 	return strings.Join(lines, "\n")
 }
 
 // prSection renders the PR part of the details panel. The heading is always
 // shown; beneath it comes whichever the lookup has produced — a spinner while
 // in flight, the PR's details, or a plain note for the no-PR, failed, and
-// unavailable outcomes.
-func (s *ChangeScreen) prSection(branchName string, state app.State, width int) []string {
-	heading := detailLabel(prHeaderIcon + " PR")
+// unavailable outcomes. height is the row budget for the whole section: the
+// CI checks page within whatever rows remain under the heading, fields, and
+// rollup line, so the section never overflows the panel.
+func (s *ChangeScreen) prSection(branchName string, state app.State, width, height int) []string {
+	heading := detailLabel("PR")
 	if branchName == "" {
 		return []string{heading, "No PR available"}
 	}
@@ -346,7 +355,15 @@ func (s *ChangeScreen) prSection(branchName string, state app.State, width int) 
 	case !entry.Found:
 		return []string{heading, "No PR available"}
 	default:
-		return append([]string{heading}, prRows(entry.Info, width)...)
+		fields := prFieldRows(entry.Info, width)
+		// Rows left for check lines once the heading, the fields, and the
+		// rollup line are placed. A degenerate budget (tiny terminal, long
+		// wrapped fields) still shows one check; the panel clips the rest,
+		// as it did for every row before paging existed.
+		s.checksPager.SetItems(entry.Info.Checks)
+		visible := s.checksPager.Page(height - len(fields) - 2)
+		lines := append([]string{heading}, fields...)
+		return append(lines, prChecksRows(entry.Info.Checks, visible, s.checksPager.Status())...)
 	}
 }
 
@@ -436,11 +453,12 @@ func (s *ChangeScreen) buildRegistry() Registry {
 			Binding{Keys: []keys.Key{keys.KeyUp, keys.KeyShiftTab}, Symbol: "↑/shift+tab", Label: "move", Action: s.actionMoveSelection},
 			Binding{Keys: []keys.Key{keys.KeyDown, keys.KeyTab}, Symbol: "↓/tab", Label: "move", Action: s.actionMoveSelection},
 			Binding{Keys: []keys.Key{keys.KeyShiftUp, keys.KeyShiftDown}, Symbol: "shift+↑↓", Label: "commits", Action: s.actionScrollCommits},
+			Binding{Keys: []keys.Key{keys.KeyShiftLeft, keys.KeyShiftRight}, Symbol: "shift+←→", Label: "checks", Action: s.actionScrollChecks},
 			Binding{Keys: []keys.Key{keys.KeyEsc, keys.KeyCtrlC}, Symbol: "esc", Label: "quit", Action: s.actionQuit},
 		),
 		ModeDialog: NewMode(
 			Binding{Keys: []keys.Key{keys.KeyEnter}, Symbol: "enter", Label: "confirm", Action: s.actionConfirmDialog},
-			Binding{Keys: []keys.Key{keys.KeyTab, keys.KeyShiftTab}, Symbol: "tab", Label: "move", Action: s.actionDialogMove},
+			Binding{Keys: []keys.Key{keys.KeyTab, keys.KeyShiftTab, keys.KeyLeft, keys.KeyRight}, Symbol: "tab/←→", Label: "move", Action: s.actionDialogMove},
 			Binding{Keys: []keys.Key{keys.KeyEsc}, Symbol: "esc", Label: "cancel", Action: s.actionCancelDialog},
 			Binding{Keys: []keys.Key{keys.KeyCtrlC}, Symbol: "ctrl+c", Label: "quit", Action: s.actionQuit},
 		),
@@ -548,16 +566,25 @@ func (s *ChangeScreen) actionMoveSelection(actx *ActionCtx) app.Command {
 	return s.fetchHoveredCommits()
 }
 
-// actionScrollCommits moves the details panel's commits window one page (the
-// window height) at a time. Only the lower bound is clamped here; the upper
-// bound depends on how many commits are loaded, which detailsView clamps
-// against at render time.
+// actionScrollCommits moves the details panel's commits window one page at a
+// time; the pager clamps against the loaded commit count at render time.
 func (s *ChangeScreen) actionScrollCommits(actx *ActionCtx) app.Command {
 	if keys.Normalize(actx.Key) == keys.KeyShiftUp {
-		s.commitScroll = max(0, s.commitScroll-commitWindowSize)
+		s.commitsPager.Prev()
 		return nil
 	}
-	s.commitScroll += commitWindowSize
+	s.commitsPager.Next()
+	return nil
+}
+
+// actionScrollChecks pages the PR section's CI checks; the page size is
+// whatever row budget the last render gave the checks list.
+func (s *ChangeScreen) actionScrollChecks(actx *ActionCtx) app.Command {
+	if keys.Normalize(actx.Key) == keys.KeyShiftLeft {
+		s.checksPager.Prev()
+		return nil
+	}
+	s.checksPager.Next()
 	return nil
 }
 
@@ -583,7 +610,8 @@ func (s *ChangeScreen) Reset() {
 	s.search.Clear()
 	s.search.Focus()
 	s.commitsBranch = ""
-	s.commitScroll = 0
+	s.commitsPager.Reset()
+	s.checksPager.Reset()
 	s.confirm.close()
 	s.addDlg.close()
 	s.list.SetItems(toItems(s.worktrees))

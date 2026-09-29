@@ -53,6 +53,32 @@ func TestUpdateCyclesFocusAndWraps(t *testing.T) {
 	}
 }
 
+func TestUpdateArrowKeysMoveFocusAndWrap(t *testing.T) {
+	m := New(Button{ID: "a", Label: "A"}, Button{ID: "b", Label: "B"})
+
+	if consumed, _ := m.Update(keyMsg(tea.KeyRight)); !consumed {
+		t.Fatal("expected right to be consumed")
+	}
+	if id, _ := m.FocusedID(); id != "b" {
+		t.Fatalf("expected b after right, got %q", id)
+	}
+
+	m.Update(keyMsg(tea.KeyRight))
+	if id, _ := m.FocusedID(); id != "a" {
+		t.Fatalf("expected right to wrap back to a, got %q", id)
+	}
+
+	m.Update(keyMsg(tea.KeyLeft))
+	if id, _ := m.FocusedID(); id != "b" {
+		t.Fatalf("expected left to wrap to b, got %q", id)
+	}
+
+	m.Update(keyMsg(tea.KeyLeft))
+	if id, _ := m.FocusedID(); id != "a" {
+		t.Fatalf("expected a after left, got %q", id)
+	}
+}
+
 func TestViewMarksOnlyFocusedButton(t *testing.T) {
 	m := New(Button{ID: "confirm", Label: "Delete"}, Button{ID: "cancel", Label: "Cancel"})
 	view := m.View()

@@ -52,16 +52,17 @@ func (m Model) FocusedID() (string, bool) {
 	return "", false
 }
 
-// Update moves focus on tab/shift+tab, reporting whether the key was consumed.
+// Update moves focus on tab/shift+tab and the left/right arrows (wrapping at
+// either end), reporting whether the key was consumed.
 func (m *Model) Update(msg tea.KeyMsg) (bool, tea.Cmd) {
 	if len(m.buttons) == 0 {
 		return false, nil
 	}
 	switch msg.String() {
-	case "shift+tab":
+	case "shift+tab", "left":
 		m.move(-1)
 		return true, nil
-	case "tab":
+	case "tab", "right":
 		m.move(1)
 		return true, nil
 	default:

@@ -162,9 +162,10 @@ func TestChangeScreenDetailsPanelShowsPRSection(t *testing.T) {
 
 	view := stripAnsiSequences(s.View(140, 40, state))
 
-	// The status pill pads its label with its own spaces, hence " Open ".
+	// The status pill pads its label with its own spaces and leads with the
+	// state's glyph, hence "  Open ".
 	for _, want := range []string{
-		"PR", "Status:     Open ", "Title:     gate remote annotation URLs",
+		"PR", "Status:      Open ", "Title:     gate remote annotation URLs",
 		"Author:    chmouel", "URL:       https://github.com/org/repo/pul",
 		"CI Checks: Pending", "linters", "e2e tests",
 	} {
@@ -289,7 +290,7 @@ func TestChangeScreenPRSectionPositionIsStableWhileCommitsLoad(t *testing.T) {
 	prLine := func(state app.State) int {
 		s.Sync(state)
 		for i, line := range strings.Split(stripAnsiSequences(s.View(140, 40, state)), "\n") {
-			if strings.Contains(line, " PR") {
+			if strings.Contains(line, "PR") {
 				return i
 			}
 		}
@@ -328,11 +329,18 @@ func TestChangeScreenCommitsWindowScrollsByPage(t *testing.T) {
 		t.Fatalf("expected the window scrolled to 6-10, got:\n%s", view)
 	}
 
-	// The next press clamps to the last full window.
+	// The next press lands on the last page, which holds just the remainder.
 	s.Update(ctx, tea.KeyMsg{Type: tea.KeyShiftDown}, state)
 	view = stripAnsiSequences(s.View(140, 40, state))
-	if !strings.Contains(view, "8-12/12") || !strings.Contains(view, "subject c12") {
-		t.Fatalf("expected the window clamped to the tail, got:\n%s", view)
+	if !strings.Contains(view, "11-12/12") || !strings.Contains(view, "subject c12") || strings.Contains(view, "subject c10") {
+		t.Fatalf("expected the remainder page at the tail, got:\n%s", view)
+	}
+
+	// Paging past the end stays on the remainder page.
+	s.Update(ctx, tea.KeyMsg{Type: tea.KeyShiftDown}, state)
+	view = stripAnsiSequences(s.View(140, 40, state))
+	if !strings.Contains(view, "11-12/12") {
+		t.Fatalf("expected to stay on the remainder page, got:\n%s", view)
 	}
 
 	// Scrolling back up clamps at the top.
@@ -345,6 +353,50 @@ func TestChangeScreenCommitsWindowScrollsByPage(t *testing.T) {
 	}
 }
 
+func TestChangeScreenPRChecksPageWithinRemainingPanelSpace(t *testing.T) {
+	checks := make([]pr.Check, 0, 8)
+	for i := 1; i <= 8; i++ {
+		checks = append(checks, pr.Check{Name: fmt.Sprintf("check-%d", i), State: pr.CheckPassed})
+	}
+	s := NewChangeScreen(fakeApp{})
+	state := app.State{
+		Worktrees:     []worktree.Info{{Path: "/repo", Branch: "feature"}},
+		BranchCommits: map[string][]branch.CommitInfo{"feature": nil},
+		BranchPRs: map[string]app.BranchPR{
+			"feature": {Found: true, Info: pr.Info{Title: "t", Status: pr.StatusOpen, Author: "max", URL: "u", Checks: checks}},
+		},
+	}
+	s.Sync(state)
+	ctx := &ScreenContext{Run: func(app.Command) tea.Cmd { return nil }}
+
+	// At this height the details panel has room for exactly three check rows
+	// beneath the PR fields, so the checks list pages in threes.
+	view := stripAnsiSequences(s.View(140, 24, state))
+	if !strings.Contains(view, "1-3/8") || !strings.Contains(view, "check-3") || strings.Contains(view, "check-4") {
+		t.Fatalf("expected the first page of checks with a range indicator, got:\n%s", view)
+	}
+
+	s.Update(ctx, tea.KeyMsg{Type: tea.KeyShiftRight}, state)
+	view = stripAnsiSequences(s.View(140, 24, state))
+	if !strings.Contains(view, "4-6/8") || !strings.Contains(view, "check-4") || strings.Contains(view, "check-7") {
+		t.Fatalf("expected the second page of checks, got:\n%s", view)
+	}
+
+	// The last page holds just the remainder, and paging past it stays there.
+	s.Update(ctx, tea.KeyMsg{Type: tea.KeyShiftRight}, state)
+	s.Update(ctx, tea.KeyMsg{Type: tea.KeyShiftRight}, state)
+	view = stripAnsiSequences(s.View(140, 24, state))
+	if !strings.Contains(view, "7-8/8") || !strings.Contains(view, "check-8") || strings.Contains(view, "check-6") {
+		t.Fatalf("expected the remainder page of checks, got:\n%s", view)
+	}
+
+	s.Update(ctx, tea.KeyMsg{Type: tea.KeyShiftLeft}, state)
+	view = stripAnsiSequences(s.View(140, 24, state))
+	if !strings.Contains(view, "4-6/8") {
+		t.Fatalf("expected paging back to the second page, got:\n%s", view)
+	}
+}
+
 func TestChangeScreenCommitScrollResetsOnHoverChange(t *testing.T) {
 	s := NewChangeScreen(fakeApp{})
 	state := app.State{Worktrees: []worktree.Info{
@@ -352,10 +404,16 @@ func TestChangeScreenCommitScrollResetsOnHoverChange(t *testing.T) {
 		{Path: "/repo-feature", Branch: "feature"},
 	}}
 	s.Sync(state)
-	s.commitScroll = 3
+	commits := make([]branch.CommitInfo, 12)
+	for i := range commits {
+		commits[i] = branch.CommitInfo{Hash: fmt.Sprintf("c%02d", i+1)}
+	}
+	s.commitsPager.SetItems(commits)
+	s.commitsPager.Page(5)
+	s.commitsPager.Next()
 
 	s.actionMoveSelection(&ActionCtx{Key: keyMsg(tea.KeyDown)})
-	if s.commitScroll != 0 {
-		t.Fatalf("expected the scroll to reset on hover change, got %d", s.commitScroll)
+	if page := s.commitsPager.Page(5); len(page) == 0 || page[0].Hash != "c01" {
+		t.Fatalf("expected the commits pager to reset on hover change, got %v", page)
 	}
 }
