@@ -1,5 +1,9 @@
 $ErrorActionPreference = "Stop"
 
+if ($env:OS -ne "Windows_NT") {
+    throw "install.ps1 supports Windows only; use scripts/install.sh on macOS/Linux"
+}
+
 $InstallDir = if ($env:GROVE_INSTALL_DIR) { $env:GROVE_INSTALL_DIR } else { Join-Path $HOME "AppData\Local\Programs\grove" }
 $BinaryPath = Join-Path $InstallDir "grove.exe"
 $ProfilePath = $PROFILE
@@ -9,7 +13,19 @@ if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
 }
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
-go build -o $BinaryPath .
+
+# Build from the repo root regardless of where the script is invoked from.
+$RepoRoot = Split-Path -Parent $PSScriptRoot
+Push-Location $RepoRoot
+try {
+    go build -o $BinaryPath .
+    if ($LASTEXITCODE -ne 0) {
+        throw "go build failed with exit code $LASTEXITCODE"
+    }
+}
+finally {
+    Pop-Location
+}
 
 $ProfileDir = Split-Path -Parent $ProfilePath
 if (-not (Test-Path $ProfileDir)) {
@@ -32,7 +48,8 @@ function Invoke-Grove {
 
     `$output = & "$BinaryPath" @Arguments
     if (`$LASTEXITCODE -ne 0) {
-        return `$LASTEXITCODE
+        # Return without emitting anything; `$LASTEXITCODE stays set for the caller.
+        return
     }
 
     if (-not [string]::IsNullOrWhiteSpace(`$output)) {
