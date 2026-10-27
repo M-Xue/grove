@@ -115,7 +115,7 @@ func TestHandleMessageMarksLoadingDoneOnSuccess(t *testing.T) {
 	a := New(Services{})
 	a.Init()
 	id := a.State().Loading[0].ID
-	a.HandleMessage(WorktreesLoadedMessage{LoadingID: id})
+	a.HandleMessage(WorktreesLoadedMessage{LoadingID: id, Seq: a.worktreeLoadSeq})
 	state := a.State()
 	if len(state.Loading) != 1 || !state.Loading[0].Active || !state.Loading[0].Completed {
 		t.Fatalf("expected completed loading state, got %#v", state.Loading)

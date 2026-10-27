@@ -3,8 +3,11 @@ package ui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/M-Xue/grove/app"
+	"github.com/M-Xue/grove/branch"
+	"github.com/M-Xue/grove/worktree"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -101,5 +104,79 @@ func TestComposeNoticesBottomAlignsEachColumn(t *testing.T) {
 func TestComposeNoticesEmpty(t *testing.T) {
 	if rows := composeNotices(nil, nil, 20); rows != nil {
 		t.Fatalf("expected nil for no notices, got %#v", rows)
+	}
+}
+
+// refreshStubWorktrees lets the model's refresh paths be executed in tests.
+type refreshStubWorktrees struct {
+	worktree.Service
+	list []worktree.Info
+}
+
+func (s refreshStubWorktrees) List(worktree.ListOptions) ([]worktree.Info, error) { return s.list, nil }
+
+func TestFocusTriggersBackgroundRefresh(t *testing.T) {
+	application := app.New(app.Services{Worktree: refreshStubWorktrees{list: []worktree.Info{{Path: "/repo", Branch: "renamed"}}}})
+	m := New(application)
+	_, cmd := m.Update(tea.FocusMsg{})
+	if cmd == nil {
+		t.Fatal("expected a focus event to issue a refresh")
+	}
+	m.Update(cmd())
+	if got := application.State().Worktrees; len(got) != 1 || got[0].Branch != "renamed" {
+		t.Fatalf("expected the focus refresh to apply the live list, got %#v", got)
+	}
+	if len(application.State().Loading) != 0 {
+		t.Fatalf("expected a silent refresh, got loading entries %#v", application.State().Loading)
+	}
+}
+
+func TestRefreshTickRefreshesOnlyWhenIdle(t *testing.T) {
+	application := app.New(app.Services{Worktree: refreshStubWorktrees{}})
+	m := New(application)
+	if m.backgroundRefresh() == nil {
+		t.Fatal("expected a background refresh when idle")
+	}
+	// A tick while that refresh is still in flight issues no second load but
+	// still re-arms the timer.
+	if m.backgroundRefresh() != nil {
+		t.Fatal("expected no second refresh while one is in flight")
+	}
+	if _, cmd := m.Update(refreshTickMsg{}); cmd == nil {
+		t.Fatal("expected the refresh tick to re-arm itself")
+	}
+}
+
+func TestRefreshIntervalScalesWithListingDuration(t *testing.T) {
+	cases := []struct {
+		lastLoad time.Duration
+		want     time.Duration
+	}{
+		{0, minRefreshInterval},                      // nothing measured yet
+		{300 * time.Millisecond, minRefreshInterval}, // cheap repo keeps the floor
+		{600 * time.Millisecond, 6 * time.Second},    // stretches with cost
+		{9 * time.Second, maxRefreshInterval},        // but is capped
+	}
+	for _, c := range cases {
+		if got := refreshIntervalFor(c.lastLoad); got != c.want {
+			t.Fatalf("refreshIntervalFor(%v) = %v, want %v", c.lastLoad, got, c.want)
+		}
+	}
+}
+
+// stubBranches lets details fetches be issued in tests.
+type stubBranches struct{}
+
+func (stubBranches) RecentCommits(string, int) ([]branch.CommitInfo, error) { return nil, nil }
+
+func TestInitialDetailsFetchUsesCachedSeed(t *testing.T) {
+	seeded := app.New(app.Services{Branch: stubBranches{}},
+		app.WithCachedWorktrees([]worktree.Info{{Path: "/repo", Branch: "main"}}))
+	if New(seeded).initialDetails() == nil {
+		t.Fatal("expected a cached seed to start the hovered branch's details fetch at startup")
+	}
+	unseeded := app.New(app.Services{Branch: stubBranches{}})
+	if New(unseeded).initialDetails() != nil {
+		t.Fatal("expected no details fetch when nothing is seeded")
 	}
 }

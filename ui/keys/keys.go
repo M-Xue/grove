@@ -12,6 +12,7 @@ const (
 	KeyCtrlA      Key = "ctrl+a"
 	KeyCtrlD      Key = "ctrl+d"
 	KeyCtrlP      Key = "ctrl+p"
+	KeyCtrlR      Key = "ctrl+r"
 	KeyUp         Key = "up"
 	KeyDown       Key = "down"
 	KeyLeft       Key = "left"
@@ -42,6 +43,8 @@ func Normalize(msg tea.KeyMsg) Key {
 		return KeyCtrlD
 	case "ctrl+p":
 		return KeyCtrlP
+	case "ctrl+r":
+		return KeyCtrlR
 	case "up":
 		return KeyUp
 	case "down":

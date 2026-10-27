@@ -1,6 +1,8 @@
 package app
 
 import (
+	"time"
+
 	"github.com/M-Xue/grove/branch"
 	"github.com/M-Xue/grove/pr"
 	"github.com/M-Xue/grove/worktree"
@@ -21,10 +23,18 @@ type Message interface{}
 // terminal directly, so ui translates this into a quit.
 type QuitRequested struct{}
 
+// WorktreesLoadedMessage carries the result of one worktree-list load. Seq is
+// the load's sequence number: HandleMessage discards any result whose Seq is
+// not the latest issued, so a slow load that completes after a newer one can
+// never overwrite the newer list (or persist a stale one to the disk cache).
 type WorktreesLoadedMessage struct {
 	LoadingID string
+	Seq       int
 	Worktrees []worktree.Info
 	Err       error
+	// Elapsed is how long the load took, so the UI can pace background
+	// refreshes to the repository's actual listing cost.
+	Elapsed time.Duration
 }
 
 // BranchExistsMessage and BranchAbsentMessage are the semantic outcomes of

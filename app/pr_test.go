@@ -140,3 +140,27 @@ func TestBranchCommitsLoadChainsPRLookup(t *testing.T) {
 		t.Fatal("expected no PR chain for an already-fetched branch")
 	}
 }
+
+func TestLoadBranchPRDoesNotDuplicateInFlightLookup(t *testing.T) {
+	service := &stubPRService{err: errors.New("rate limited")}
+	a := New(Services{PR: service})
+
+	first := a.LoadBranchPR("feature")
+	if first == nil {
+		t.Fatal("expected the first lookup to be issued")
+	}
+	// A reload that re-chains into the PR lookup before the first lands (the
+	// live list following a cached startup, say) must not issue a second one.
+	if a.LoadBranchPR("feature") != nil {
+		t.Fatal("expected no duplicate lookup while the first is in flight")
+	}
+	// Once the in-flight lookup lands — here with a transient failure — the
+	// branch is retryable again.
+	a.HandleMessage(first())
+	if len(service.called) != 1 {
+		t.Fatalf("expected exactly one gh call, got %d", len(service.called))
+	}
+	if a.LoadBranchPR("feature") == nil {
+		t.Fatal("expected a retry to be allowed after the in-flight lookup failed")
+	}
+}

@@ -32,8 +32,13 @@ func main() {
 	options := []app.Option{app.WithInitialScreen(cmd.Screen)}
 	options = append(options, worktreeCacheOptions(runner)...)
 
+	// The worktree listing runs git status inside every worktree, which on a
+	// large repository can take far longer than the default per-command
+	// timeout allows; the listing gets its own, longer bound.
+	worktreeRunner := command.NewWithTimeout(command.RepositoryScanTimeout)
+
 	application := app.New(app.Services{
-		Worktree: worktree.NewService(runner),
+		Worktree: worktree.NewService(worktreeRunner),
 		Branch:   branch.NewService(runner),
 		PR:       pr.NewService(runner),
 	}, options...)
@@ -44,9 +49,20 @@ func main() {
 	// strip the styling from anything rendered through the default renderer (e.g.
 	// the bubbles/help footer hints). Point the default renderer at stderr — the
 	// real tty the TUI writes to — so colors survive.
-	lipgloss.SetDefaultRenderer(lipgloss.NewRenderer(os.Stderr))
+	renderer := lipgloss.NewRenderer(os.Stderr)
+	// Lip Gloss would otherwise ask the terminal for its background colour (an
+	// OSC 11 query) the first time an adaptive colour is rendered — the help
+	// footer uses them — and wait up to termenv's 5s timeout for the answer.
+	// A terminal that never answers (an editor's embedded terminal, some IDE
+	// terminals) would stall grove's first frame for the full 5s. grove's own
+	// palette is fixed 256-colour and only the footer's greys adapt, so the
+	// query buys nothing: declare a dark background and skip it.
+	renderer.SetHasDarkBackground(true)
+	lipgloss.SetDefaultRenderer(renderer)
 
-	p := tea.NewProgram(ui.New(application), tea.WithAltScreen(), tea.WithOutput(os.Stderr))
+	// Focus reporting lets the UI refresh the worktree list the moment the
+	// terminal regains focus, picking up changes made in another terminal.
+	p := tea.NewProgram(ui.New(application), tea.WithAltScreen(), tea.WithOutput(os.Stderr), tea.WithReportFocus())
 	model, err := p.Run()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error running grove: %v\n", err)

@@ -70,3 +70,12 @@ func TestOutputAttachesStderrToError(t *testing.T) {
 		t.Fatalf("expected stderr in error text, got %v", err)
 	}
 }
+
+func TestNewWithTimeoutAppliesTimeout(t *testing.T) {
+	if got := NewWithTimeout(RepositoryScanTimeout).timeout; got != RepositoryScanTimeout {
+		t.Fatalf("expected %v, got %v", RepositoryScanTimeout, got)
+	}
+	if RepositoryScanTimeout <= DefaultTimeout {
+		t.Fatalf("the repository scan timeout (%v) must exceed the default (%v)", RepositoryScanTimeout, DefaultTimeout)
+	}
+}

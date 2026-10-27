@@ -14,3 +14,4 @@ func (fakeApp) Quit() app.Command                               { return nil }
 func (fakeApp) RequestAddWorktree(string, string) app.Command   { return nil }
 func (fakeApp) CreateBranchWorktree(string, string) app.Command { return nil }
 func (fakeApp) LoadBranchCommits(string) app.Command            { return nil }
+func (fakeApp) RefreshWorktrees() app.Command                   { return nil }

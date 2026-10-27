@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -50,12 +51,23 @@ type commandResult struct {
 
 type stubRunner struct {
 	results map[string]commandResult
-	calls   []commandCall
+	// mu guards calls: List probes worktrees concurrently, so CombinedOutput
+	// is invoked from several goroutines at once.
+	mu    sync.Mutex
+	calls []commandCall
+	// onCall, when set, runs for every CombinedOutput before the scripted
+	// result is returned; tests use it to observe or stall concurrent probes.
+	onCall func(name string, args []string)
 }
 
 func (s *stubRunner) CombinedOutput(name string, args ...string) ([]byte, error) {
 	call := commandCall{name: name, args: append([]string(nil), args...)}
+	s.mu.Lock()
 	s.calls = append(s.calls, call)
+	s.mu.Unlock()
+	if s.onCall != nil {
+		s.onCall(name, call.args)
+	}
 
 	key := name + "\x00" + joinArgs(args)
 	result, ok := s.results[key]
@@ -417,7 +429,7 @@ func TestServiceListReturnsStructuredWorktrees(t *testing.T) {
 	}
 
 	svc := service{runner: runner, stat: existingStat(nil)}
-	got, err := svc.List()
+	got, err := svc.List(ListOptions{})
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -472,7 +484,7 @@ func TestServiceListPinsMainWorktreeThenOrdersRestOldestFirst(t *testing.T) {
 	}
 	svc := service{runner: runner, stat: existingStat(modTimes)}
 
-	got, err := svc.List()
+	got, err := svc.List(ListOptions{})
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -510,7 +522,7 @@ func TestServiceListSortsUndeterminableCreationTimesLast(t *testing.T) {
 	}
 	svc := service{runner: runner, stat: existingStat(modTimes)}
 
-	got, err := svc.List()
+	got, err := svc.List(ListOptions{})
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -542,7 +554,7 @@ func TestServiceListSupportsDetachedHead(t *testing.T) {
 	}
 
 	svc := service{runner: runner, stat: existingStat(nil)}
-	got, err := svc.List()
+	got, err := svc.List(ListOptions{})
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -571,7 +583,7 @@ func TestServiceListMarksStaleWorktreesWithoutInspectingPath(t *testing.T) {
 	}
 
 	svc := service{runner: runner, stat: existingStat(nil)}
-	got, err := svc.List()
+	got, err := svc.List(ListOptions{})
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -637,7 +649,7 @@ func TestServiceListMarksLockedWorktreeLockedNotStale(t *testing.T) {
 		},
 	}
 
-	got, err := svc.List()
+	got, err := svc.List(ListOptions{})
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -704,7 +716,7 @@ func TestServiceListMarksMissingUnannotatedWorktreeStale(t *testing.T) {
 		},
 	}
 
-	got, err := svc.List()
+	got, err := svc.List(ListOptions{})
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -756,7 +768,7 @@ func TestServiceListMarksLockedWorktreeWithIntactDirectory(t *testing.T) {
 
 	svc := service{runner: runner, stat: existingStat(nil)}
 
-	got, err := svc.List()
+	got, err := svc.List(ListOptions{})
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
@@ -798,7 +810,7 @@ func TestServiceListIgnoresUntrackedFilesForDirtyState(t *testing.T) {
 	}
 
 	svc := service{runner: runner, stat: existingStat(nil)}
-	got, err := svc.List()
+	got, err := svc.List(ListOptions{})
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}

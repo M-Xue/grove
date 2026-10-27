@@ -30,9 +30,24 @@ type Runner struct {
 	timeout time.Duration
 }
 
+// RepositoryScanTimeout bounds the commands behind the worktree listing. The
+// listing runs `git status` inside every worktree, and on a large repository
+// a status whose index has gone stale can take far longer than
+// DefaultTimeout allows for (a cold status in a monorepo of ~700k tracked
+// files measured 9s; a bigger or busier one takes longer still). Timing it
+// out would fail the whole list and leave nothing to cache, so the next
+// launch would pay the same price again.
+const RepositoryScanTimeout = 2 * time.Minute
+
 // New returns a Runner that applies DefaultTimeout to each command.
 func New() Runner {
 	return Runner{timeout: DefaultTimeout}
+}
+
+// NewWithTimeout returns a Runner that applies timeout to each command. A
+// non-positive timeout falls back to DefaultTimeout.
+func NewWithTimeout(timeout time.Duration) Runner {
+	return Runner{timeout: timeout}
 }
 
 // CombinedOutput runs name with args under a timeout and returns the combined

@@ -1,6 +1,8 @@
 package app
 
 import (
+	"time"
+
 	"github.com/M-Xue/grove/branch"
 	"github.com/M-Xue/grove/pr"
 	"github.com/M-Xue/grove/worktree"
@@ -53,6 +55,10 @@ type State struct {
 	Screen        ScreenID
 	SubmittedPath string
 	Worktrees     []worktree.Info
+	// WorktreeLoadDuration is how long the most recent successful worktree
+	// list took to load. The UI paces background refreshes by it, so a
+	// repository whose listing is expensive is polled less often.
+	WorktreeLoadDuration time.Duration
 	// BranchCommits caches the recent commits fetched per branch, keyed by
 	// short branch name. Entries are filled lazily as the change screen hovers
 	// worktrees and overwritten wholesale when a fetch for that branch lands.

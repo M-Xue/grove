@@ -27,6 +27,7 @@ type changeApp interface {
 	ForceRemoveWorktree(path string) app.Command
 	PruneWorktrees() app.Command
 	LoadBranchCommits(branch string) app.Command
+	RefreshWorktrees() app.Command
 	Quit() app.Command
 }
 
@@ -111,10 +112,9 @@ func (s *ChangeScreen) Sync(state app.State) {
 // create it.
 func (s *ChangeScreen) OnMessage(ctx *ScreenContext, msg app.Message) tea.Cmd {
 	if _, ok := msg.(app.WorktreesLoadedMessage); ok {
-		// Force a refetch even when the hover is unchanged: the reload may
-		// follow an add/remove that moved the branch's tip.
-		s.commitsBranch = ""
-		return ctx.Run(s.fetchHoveredCommits())
+		// Refetch even when the hover is unchanged: the reload may follow an
+		// add/remove or an external change that moved the branch's tip.
+		return ctx.Run(s.loadHoveredCommits(true))
 	}
 	absent, ok := msg.(app.BranchAbsentMessage)
 	if !ok {
@@ -163,17 +163,39 @@ func (s *ChangeScreen) Update(ctx *ScreenContext, msg tea.KeyMsg, state app.Stat
 	return nil
 }
 
+// Init returns the command that fetches the hovered worktree's details for a
+// list that is present before any live load lands (the cached seed), or nil
+// when the list is empty. The model issues it at startup alongside the first
+// load so the details panel need not wait for a slow listing.
+func (s *ChangeScreen) Init() app.Command {
+	return s.fetchHoveredCommits()
+}
+
 // fetchHoveredCommits returns the command that loads recent commits for the
 // hovered worktree's branch, or nil when the hover is unchanged (or empty) so
 // selection moves within the same branch do not refetch.
 func (s *ChangeScreen) fetchHoveredCommits() app.Command {
+	return s.loadHoveredCommits(false)
+}
+
+// loadHoveredCommits is fetchHoveredCommits with an override: when force is
+// set an unchanged hover is refetched too (the list was just reloaded, so the
+// branch tip may have moved). Only a genuine hover change resets the detail
+// pagers, so a background refresh never yanks the user's scroll position.
+func (s *ChangeScreen) loadHoveredCommits(force bool) app.Command {
 	worktree, ok := s.hoveredWorktree()
-	if !ok || worktree.branch == "" || worktree.branch == s.commitsBranch {
+	if !ok || worktree.branch == "" {
 		return nil
 	}
-	s.commitsBranch = worktree.branch
-	s.commitsPager.Reset()
-	s.checksPager.Reset()
+	if worktree.branch == s.commitsBranch {
+		if !force {
+			return nil
+		}
+	} else {
+		s.commitsBranch = worktree.branch
+		s.commitsPager.Reset()
+		s.checksPager.Reset()
+	}
 	return s.app.LoadBranchCommits(worktree.branch)
 }
 
@@ -450,6 +472,7 @@ func (s *ChangeScreen) buildRegistry() Registry {
 			Binding{Keys: []keys.Key{keys.KeyCtrlA}, Symbol: "ctrl+a", Label: "add", Action: s.actionOpenAdd},
 			Binding{Keys: []keys.Key{keys.KeyCtrlD}, Symbol: "ctrl+d", Label: "remove", Action: s.actionStartRemove},
 			Binding{Keys: []keys.Key{keys.KeyCtrlP}, Symbol: "ctrl+p", Label: "prune", Action: s.actionStartPrune},
+			Binding{Keys: []keys.Key{keys.KeyCtrlR}, Symbol: "ctrl+r", Label: "refresh", Action: s.actionRefresh},
 			Binding{Keys: []keys.Key{keys.KeyUp, keys.KeyShiftTab}, Symbol: "↑/shift+tab", Label: "move", Action: s.actionMoveSelection},
 			Binding{Keys: []keys.Key{keys.KeyDown, keys.KeyTab}, Symbol: "↓/tab", Label: "move", Action: s.actionMoveSelection},
 			Binding{Keys: []keys.Key{keys.KeyShiftUp, keys.KeyShiftDown}, Symbol: "shift+↑↓", Label: "commits", Action: s.actionScrollCommits},
@@ -586,6 +609,12 @@ func (s *ChangeScreen) actionScrollChecks(actx *ActionCtx) app.Command {
 	}
 	s.checksPager.Next()
 	return nil
+}
+
+// actionRefresh reloads the worktree list on demand, for terminals that do
+// not report focus and for anyone who does not want to wait for the poll.
+func (s *ChangeScreen) actionRefresh(actx *ActionCtx) app.Command {
+	return s.app.RefreshWorktrees()
 }
 
 func (s *ChangeScreen) actionQuit(actx *ActionCtx) app.Command {

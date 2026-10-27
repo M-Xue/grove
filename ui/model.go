@@ -19,6 +19,10 @@ type appMsg struct{ msg app.Message }
 // spinnerTickMsg advances the loading spinner one frame.
 type spinnerTickMsg struct{}
 
+// refreshTickMsg fires on the periodic worktree-refresh timer so changes made
+// outside grove show up without a keypress.
+type refreshTickMsg struct{}
+
 // streamNextMsg carries one app.Message drained from a streaming operation's
 // channel, along with the channel so the reader can re-subscribe for the next
 // message until the channel is closed.
@@ -44,6 +48,21 @@ const (
 	verticalPadding   = 2
 	// spinnerInterval is how often the Braille spinner advances a frame.
 	spinnerInterval = 80 * time.Millisecond
+	// minRefreshInterval is the floor on how often the worktree list is
+	// re-read from git in the background. Each refresh costs a few git
+	// subprocesses per worktree, so it is deliberately slow; focus changes
+	// and ctrl+r cover the moments a user actually expects an instant update.
+	// The actual interval stretches with how long the last listing took (see
+	// refreshIntervalFor), so a repository whose git status is expensive is
+	// not kept permanently busy by grove's polling.
+	minRefreshInterval = 3 * time.Second
+	// maxRefreshInterval caps that stretch so even a very slow repository is
+	// still polled now and then.
+	maxRefreshInterval = 30 * time.Second
+	// refreshIntervalFactor is how many listing-durations of idle time
+	// separate background refreshes once the floor is exceeded: a 1s listing
+	// is polled every 10s, a 3s one every 30s.
+	refreshIntervalFactor = 10
 )
 
 type Model struct {
@@ -68,7 +87,19 @@ func New(application *app.App) *Model {
 }
 
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.run(m.app.Init()), m.ensureSpinner())
+	return tea.Batch(m.run(m.app.Init()), m.initialDetails(), m.ensureSpinner(), m.refreshTick())
+}
+
+// initialDetails fetches the hovered worktree's details (its commits, and
+// from those its PR) when the list was seeded from the disk cache. Without
+// it the details panel would spin until the live list lands — on a large
+// repository the slowest part of startup — even though the hovered branch is
+// already known. When the live list does land the screen refetches anyway,
+// since the branch tip may have moved, so this is purely a head start. It is
+// nil when nothing was seeded.
+func (m *Model) initialDetails() tea.Cmd {
+	m.syncScreens()
+	return m.run(m.change.Init())
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -103,6 +134,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Re-subscribe for the next message; readStream stops when the channel
 		// closes after the terminal message.
 		return m, tea.Batch(m.run(next), reaction, readStream(msg.ch), m.ensureSpinner())
+	case tea.FocusMsg:
+		// The user has come back from another window — the most likely moment
+		// for the worktrees to have changed under us.
+		return m, m.backgroundRefresh()
+	case refreshTickMsg:
+		return m, tea.Batch(m.backgroundRefresh(), m.refreshTick())
 	case spinnerTickMsg:
 		if !m.hasSpinnerWork() {
 			m.spinning = false
@@ -142,6 +179,29 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // never trapped.
 func inputFrozen(state app.State, msg tea.KeyMsg) bool {
 	return state.IsBusy() && msg.Type != tea.KeyCtrlC
+}
+
+// refreshTick schedules the next background worktree refresh. Init starts the
+// loop and every tick re-arms it, so exactly one loop runs for the session.
+// The delay is recomputed on every re-arm from the latest listing's duration.
+func (m *Model) refreshTick() tea.Cmd {
+	return tea.Tick(refreshIntervalFor(m.app.State().WorktreeLoadDuration), func(time.Time) tea.Msg {
+		return refreshTickMsg{}
+	})
+}
+
+// refreshIntervalFor is the delay before the next background refresh given
+// how long the last worktree listing took: refreshIntervalFactor times that
+// duration, never below minRefreshInterval nor above maxRefreshInterval. A
+// listing of 300ms keeps the 3s floor; one of 9s is polled every 30s.
+func refreshIntervalFor(lastLoad time.Duration) time.Duration {
+	return max(minRefreshInterval, min(lastLoad*refreshIntervalFactor, maxRefreshInterval))
+}
+
+// backgroundRefresh issues a silent worktree reload; app declines it while a
+// load or a blocking operation is already in flight, in which case this is nil.
+func (m *Model) backgroundRefresh() tea.Cmd {
+	return m.run(m.app.RefreshWorktreesInBackground())
 }
 
 // spinnerTick schedules the next spinner frame.

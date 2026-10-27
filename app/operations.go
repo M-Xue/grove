@@ -1,6 +1,10 @@
 package app
 
-import "github.com/M-Xue/grove/worktree"
+import (
+	"time"
+
+	"github.com/M-Xue/grove/worktree"
+)
 
 // This file defines the async operations grove can perform. Each helper runs
 // on the main loop: it synchronously sets a loading entry (capturing its ID)
@@ -9,11 +13,37 @@ import "github.com/M-Xue/grove/worktree"
 // carries the loading ID back so HandleMessage can resolve exactly that entry.
 
 func (a *App) loadWorktrees() Command {
-	id := a.setLoading("loading worktrees")
+	return a.startWorktreeLoad(a.setLoading("loading worktrees"), false)
+}
+
+// startWorktreeLoad issues a worktree-list load under the given loading entry
+// (empty for a silent background refresh). background selects the worktree
+// service's lock-free listing, which silent refreshes use so they never hold
+// a worktree's index.lock against the user (see worktree.ListOptions). Each
+// load takes the next sequence number; a still-pending earlier load is
+// superseded — its loading entry is dropped now and its result discarded when
+// it lands — so the list on screen and in the disk cache always reflects the
+// most recently issued load. The load is timed so the UI can pace background
+// refreshes to what a listing actually costs in this repository.
+func (a *App) startWorktreeLoad(loadingID string, background bool) Command {
+	if a.worktreeLoadPending && a.worktreeLoadID != "" && a.worktreeLoadID != loadingID {
+		a.clearLoadingEntry(a.worktreeLoadID)
+	}
+	a.worktreeLoadSeq++
+	a.worktreeLoadPending = true
+	a.worktreeLoadID = loadingID
+	seq := a.worktreeLoadSeq
 	worktrees := a.services.Worktree
 	return func() Message {
-		list, err := worktrees.List()
-		return WorktreesLoadedMessage{LoadingID: id, Worktrees: list, Err: err}
+		started := time.Now()
+		list, err := worktrees.List(worktree.ListOptions{Background: background})
+		return WorktreesLoadedMessage{
+			LoadingID: loadingID,
+			Seq:       seq,
+			Worktrees: list,
+			Err:       err,
+			Elapsed:   time.Since(started),
+		}
 	}
 }
 

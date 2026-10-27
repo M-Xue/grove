@@ -6,7 +6,8 @@ package app
 // API: a branch is fetched at most once per session (hit or "no PR" alike),
 // and nothing is fetched once a lookup has reported the environment can't do
 // PR lookups at all. Transient failures are not cached, so the next hover of
-// that branch retries.
+// that branch retries. A lookup already in flight is never duplicated: the
+// caller gets nil and the pending result will resolve the panel.
 func (a *App) LoadBranchPR(name string) Command {
 	if name == "" || a.services.PR == nil || a.state.PRLookupUnavailable {
 		return nil
@@ -14,6 +15,13 @@ func (a *App) LoadBranchPR(name string) Command {
 	if entry, cached := a.state.BranchPRs[name]; cached && !entry.Failed {
 		return nil
 	}
+	if a.prLookupsInFlight[name] {
+		return nil
+	}
+	if a.prLookupsInFlight == nil {
+		a.prLookupsInFlight = make(map[string]bool)
+	}
+	a.prLookupsInFlight[name] = true
 	prs := a.services.PR
 	return func() Message {
 		info, found, err := prs.ForBranch(name)

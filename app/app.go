@@ -6,9 +6,22 @@ type App struct {
 	services       Services
 	state          State
 	loadingCounter int
+	// worktreeLoadSeq numbers worktree-list loads; only the result bearing the
+	// latest number is applied. worktreeLoadPending reports whether that
+	// latest load is still in flight, and worktreeLoadID is its loading entry
+	// (empty for a silent background refresh).
+	worktreeLoadSeq     int
+	worktreeLoadPending bool
+	worktreeLoadID      string
 	// saveWorktrees persists the latest worktree list for stale-while-revalidate
 	// startup. It is best-effort and injected by main; nil disables caching.
 	saveWorktrees func([]worktree.Info)
+	// prLookupsInFlight marks branches whose PR lookup has been issued but
+	// has not yet landed. A lookup is a slow network round-trip, and the
+	// commits fetch that chains into it is reissued on every worktree reload
+	// (including the live load that follows a cached startup), so without
+	// this guard one hover could cost several identical gh calls.
+	prLookupsInFlight map[string]bool
 }
 
 type Option func(*App)

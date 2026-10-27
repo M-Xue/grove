@@ -5,6 +5,7 @@ import (
 
 	"github.com/M-Xue/grove/branch"
 	"github.com/M-Xue/grove/pr"
+	"github.com/M-Xue/grove/worktree"
 )
 
 // HandleMessage applies a completed Command's Message to state and may return
@@ -13,18 +14,27 @@ import (
 func (a *App) HandleMessage(message Message) Command {
 	switch msg := message.(type) {
 	case WorktreesLoadedMessage:
+		if msg.Seq != a.worktreeLoadSeq {
+			// Superseded by a newer load whose result will land on its own;
+			// applying this one would roll the list (and the cache) back.
+			a.clearLoadingEntry(msg.LoadingID)
+			return nil
+		}
+		a.worktreeLoadPending = false
 		if msg.Err != nil {
 			a.clearLoadingEntry(msg.LoadingID)
 			a.appendStatus(StatusError, msg.Err.Error())
 			return nil
 		}
+		changed := !worktree.InfosEqual(a.state.Worktrees, msg.Worktrees)
 		a.state.Worktrees = msg.Worktrees
-		a.state.SubmittedPath = ""
+		a.state.WorktreeLoadDuration = msg.Elapsed
 		a.markLoadingDone(msg.LoadingID)
 		// Persist the fresh list for the next launch's instant paint. This is
-		// the single choke point every add/remove/prune funnels through, so
-		// the cache stays consistent with what the screen shows.
-		if a.saveWorktrees != nil {
+		// the single choke point every load funnels through, so the cache
+		// stays consistent with what the screen shows. Background refreshes
+		// usually find nothing new, so an unchanged list skips the write.
+		if changed && a.saveWorktrees != nil {
 			a.saveWorktrees(msg.Worktrees)
 		}
 		return nil
@@ -60,6 +70,7 @@ func (a *App) HandleMessage(message Message) Command {
 		// second command. LoadBranchPR’s own caching keeps this from repeating.
 		return a.LoadBranchPR(msg.Branch)
 	case BranchPRLoadedMessage:
+		delete(a.prLookupsInFlight, msg.Branch)
 		if a.state.BranchPRs == nil {
 			a.state.BranchPRs = make(map[string]BranchPR)
 		}
