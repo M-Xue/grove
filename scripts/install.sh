@@ -76,9 +76,9 @@ cat > "$init_file" <<EOF
 grove() {
     local output
     output="\$("$BINARY_PATH" "\$@")"
-    local status=\$?
-    if [ \$status -ne 0 ]; then
-        return \$status
+    local exit_code=\$?
+    if [ \$exit_code -ne 0 ]; then
+        return \$exit_code
     fi
     if [ -n "\$output" ]; then
         cd "\$output" || return 1
